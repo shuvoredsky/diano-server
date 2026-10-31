@@ -13,8 +13,8 @@
 | Milestone | Description | Status | Notes |
 |:---|:---|:---:|:---|
 | **M1: Project Setup & Core Foundation** | Base project, strict TypeScript, ESLint flat config, Prettier, Pino logger with redaction, Zod env validation, AppError, ApiResponse, Date & Currency utils, Health/Readiness endpoints, Vitest test suite | ✅ Completed | Fully functional without requiring local DB/Redis running |
-| **M2: Prisma Data Modeling** | Complete Prisma schema with enums, audit fields, Decimal money, immutable order item snapshots, stock movement ledger, idempotency keys, coupon usage, payment events, safe seed script | ⏳ Pending Next | Awaiting Phase 5 / User "continue M2" signal |
-| **M3: Auth & Identity** | JWT auth, refresh token rotation, RBAC, session management, secure cookie | ⏳ Queued | Planned |
+| **M2: Prisma Data Modeling** | Complete Prisma 7 schema (48 models, 19 enums), Decimal(12,2) money, cuid IDs, immutable order item snapshots, double-entry stock movement ledger, payment events, idempotency keys, safe idempotent seed script, docs/SCHEMA_SUMMARY.md | ✅ Completed | Schema validated & formatted; Client generated; Seed ready (DB migration pending) |
+| **M3: Auth & Identity** | JWT auth, refresh token rotation, RBAC, session management, secure cookie, rate-limited auth endpoints | ⏳ Pending Next | Awaiting Phase / User "continue M3" signal |
 | **M4: Catalog & Inventory** | Categories, products, variants, SKU, stock movement ledger | ⏳ Queued | Planned |
 | **M5: Cart & Checkout** | Cart sessions, abandoned cart tracking, atomic stock reservations | ⏳ Queued | Planned |
 | **M6: Orders & Payments** | Order state machine, payment events, idempotency keys, refunds | ⏳ Queued | Planned |
