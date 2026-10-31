@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { productsController } from './products.controller';
 import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
-import { handleUploadMultiple } from '@/middlewares/upload.middleware';
+import { handleUploadMultiple, handleUploadSingle } from '@/middlewares/upload.middleware';
 
 export const productsRouter = Router();
 
@@ -83,11 +83,36 @@ productsRouter.delete(
 );
 
 // Image Gallery Management
+// Note: Fixed sub-paths must precede parameter routes /:imageId
 productsRouter.put(
   '/:id/images/reorder',
   authenticate,
   requirePermission('product:update'),
   productsController.reorderImages,
+);
+
+productsRouter.post(
+  '/:id/images/thumbnail',
+  authenticate,
+  requirePermission('product:update'),
+  handleUploadSingle('image'),
+  productsController.uploadThumbnail,
+);
+
+productsRouter.post(
+  '/:id/images/backview',
+  authenticate,
+  requirePermission('product:update'),
+  handleUploadSingle('image'),
+  productsController.uploadBackview,
+);
+
+productsRouter.post(
+  '/:id/images/gallery',
+  authenticate,
+  requirePermission('product:update'),
+  handleUploadSingle('image'),
+  productsController.uploadGallery,
 );
 
 productsRouter.post(

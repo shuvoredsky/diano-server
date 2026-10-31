@@ -9,6 +9,19 @@ import { logger } from '@/utils/logger';
 export interface UploadResult {
   url: string;
   key: string;
+  publicId?: string;
+  width?: number;
+  height?: number;
+  format?: string;
+  bytes?: number;
+}
+
+export interface ResponsiveImageUrls {
+  original: string;
+  thumbnail: string; // 200w
+  card: string; // 400w
+  detail: string; // 900w
+  zoom: string; // 1600w
 }
 
 export interface FileInput {
@@ -22,6 +35,7 @@ export interface IStorageAdapter {
   upload(file: FileInput, folder?: string): Promise<UploadResult>;
   delete(key: string): Promise<boolean>;
   getUrl(key: string): string;
+  isAvailable(): boolean;
 }
 
 /**
@@ -75,6 +89,44 @@ export function validateImageSignature(buffer: Buffer): {
 }
 
 /**
+ * Generates responsive transformation URLs for Cloudinary assets.
+ * Applies f_auto and q_auto optimization presets.
+ */
+export function getResponsiveImageUrls(
+  originalUrl: string,
+  publicId?: string | null,
+): ResponsiveImageUrls {
+  if (publicId && env.CLOUDINARY_CLOUD_NAME) {
+    const buildVariantUrl = (width: number) => {
+      return cloudinary.url(publicId, {
+        secure: true,
+        transformation: [
+          { width, crop: 'limit' },
+          { quality: 'auto', fetch_format: 'auto' },
+        ],
+      });
+    };
+
+    return {
+      original: originalUrl,
+      thumbnail: buildVariantUrl(200),
+      card: buildVariantUrl(400),
+      detail: buildVariantUrl(900),
+      zoom: buildVariantUrl(1600),
+    };
+  }
+
+  // Fallback for local disk or non-Cloudinary images
+  return {
+    original: originalUrl,
+    thumbnail: originalUrl,
+    card: originalUrl,
+    detail: originalUrl,
+    zoom: originalUrl,
+  };
+}
+
+/**
  * Local Disk Adapter (Development only)
  * Stores files to /uploads directory with secure randomized filenames.
  */
@@ -83,6 +135,10 @@ export class LocalDiskAdapter implements IStorageAdapter {
 
   constructor(baseDir = path.resolve(process.cwd(), 'uploads')) {
     this.baseDir = baseDir;
+  }
+
+  isAvailable(): boolean {
+    return true;
   }
 
   async upload(file: FileInput, folder = 'general'): Promise<UploadResult> {
@@ -104,7 +160,12 @@ export class LocalDiskAdapter implements IStorageAdapter {
     const relativeKey = `${folder}/${safeFilename}`;
     const url = `/uploads/${relativeKey}`;
 
-    return { url, key: relativeKey };
+    return {
+      url,
+      key: relativeKey,
+      format: signature.ext,
+      bytes: file.buffer.length,
+    };
   }
 
   async delete(key: string): Promise<boolean> {
@@ -128,7 +189,7 @@ export class LocalDiskAdapter implements IStorageAdapter {
 
 /**
  * Cloudinary Storage Adapter
- * Secure cloud storage using Cloudinary SDK
+ * Secure signed cloud storage using Cloudinary SDK
  */
 export class CloudinaryAdapter implements IStorageAdapter {
   private isConfigured: boolean;
@@ -148,10 +209,14 @@ export class CloudinaryAdapter implements IStorageAdapter {
     }
   }
 
+  isAvailable(): boolean {
+    return this.isConfigured;
+  }
+
   async upload(file: FileInput, folder = 'diano/products'): Promise<UploadResult> {
     if (!this.isConfigured) {
-      throw AppError.internal(
-        'Cloudinary adapter selected but credentials (CLOUDINARY_CLOUD_NAME/KEY/SECRET) are not configured in environment',
+      throw AppError.serviceUnavailable(
+        'Storage service is not configured. Cloudinary credentials missing from environment.',
       );
     }
 
@@ -167,6 +232,8 @@ export class CloudinaryAdapter implements IStorageAdapter {
           resource_type: 'image',
           allowed_formats: ['jpg', 'png', 'webp'],
           public_id: crypto.randomUUID(),
+          image_metadata: false,
+          flags: 'strip_profile', // Strip EXIF / GPS metadata
         },
         (error, result) => {
           if (error || !result) {
@@ -177,6 +244,11 @@ export class CloudinaryAdapter implements IStorageAdapter {
           resolve({
             url: result.secure_url,
             key: result.public_id,
+            publicId: result.public_id,
+            width: result.width,
+            height: result.height,
+            format: result.format,
+            bytes: result.bytes,
           });
         },
       );
@@ -227,13 +299,15 @@ export class StorageService {
   }
 
   /**
-   * Upload an image with strict security validation
+   * Upload an image with strict security validation and file size check
    */
   async uploadImage(file: FileInput, folder = 'products'): Promise<UploadResult> {
-    // 1. File size check
-    if (file.buffer.length > env.MAX_FILE_SIZE_BYTES) {
+    // 1. File size check against MAX_IMAGE_SIZE_MB
+    const maxBytes = env.MAX_IMAGE_SIZE_MB * 1024 * 1024;
+    if (file.buffer.length > maxBytes) {
+      const actualMb = (file.buffer.length / (1024 * 1024)).toFixed(2);
       throw AppError.badRequest(
-        `File size exceeds maximum allowed limit of ${Math.round(env.MAX_FILE_SIZE_BYTES / 1024 / 1024)}MB`,
+        `File size (${actualMb}MB) exceeds maximum allowed limit of ${env.MAX_IMAGE_SIZE_MB}MB`,
       );
     }
 
@@ -249,7 +323,7 @@ export class StorageService {
   }
 
   /**
-   * Delete an image by storage key
+   * Delete an image by storage key / publicId
    */
   async deleteImage(key: string): Promise<boolean> {
     return this.adapter.delete(key);

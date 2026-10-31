@@ -22,7 +22,7 @@ const fileFilter = (
 export const upload = multer({
   storage,
   limits: {
-    fileSize: env.MAX_FILE_SIZE_BYTES,
+    fileSize: env.MAX_IMAGE_SIZE_MB * 1024 * 1024,
     files: 10,
   },
   fileFilter,
@@ -35,7 +35,7 @@ export const handleUploadSingle = (fieldName = 'image') => {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return next(
             AppError.badRequest(
-              `File exceeds size limit of ${Math.round(env.MAX_FILE_SIZE_BYTES / 1024 / 1024)}MB`,
+              `File exceeds size limit of ${env.MAX_IMAGE_SIZE_MB}MB`,
             ),
           );
         }
@@ -56,7 +56,7 @@ export const handleUploadMultiple = (fieldName = 'images', maxCount = 10) => {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return next(
             AppError.badRequest(
-              `One or more files exceed the size limit of ${Math.round(env.MAX_FILE_SIZE_BYTES / 1024 / 1024)}MB`,
+              `One or more files exceed the size limit of ${env.MAX_IMAGE_SIZE_MB}MB`,
             ),
           );
         }

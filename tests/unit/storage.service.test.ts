@@ -75,7 +75,7 @@ describe('StorageService & Image Security (Unit Tests)', () => {
           originalname: 'huge.jpg',
           mimetype: 'image/jpeg',
         }),
-      ).rejects.toThrow('File size exceeds maximum allowed limit of 5MB');
+      ).rejects.toThrow(/exceeds maximum allowed limit of/);
     });
 
     it('should reject upload if magic-byte validation fails despite valid MIME header', async () => {
@@ -124,7 +124,7 @@ describe('StorageService & Image Security (Unit Tests)', () => {
           originalname: 'sample.jpg',
           mimetype: 'image/jpeg',
         }),
-      ).rejects.toThrow('Cloudinary adapter selected but credentials');
+      ).rejects.toThrow(/Storage service is not configured/);
     });
   });
 });

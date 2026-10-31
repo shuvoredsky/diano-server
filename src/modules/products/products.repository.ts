@@ -1,11 +1,12 @@
 import { prisma } from '@/config/database';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type {
   CreateProductDto,
   CreateVariantInput,
   IProductsRepository,
   ProductEntity,
   ProductImageEntity,
+  ProductImageSlot,
   ProductQueryFilter,
   ProductVariantEntity,
   UpdateProductDto,
@@ -191,6 +192,20 @@ export class PrismaProductsRepository implements IProductsRepository {
           description: data.description,
           shortDescription: data.shortDescription,
           categoryId: data.categoryId,
+          videoUrl: data.videoUrl ?? null,
+          freeShipping: data.freeShipping ?? false,
+          inventoryType: data.inventoryType ?? 'READY_STOCK',
+          specifications: (data.specifications ?? {}) as Prisma.InputJsonValue,
+          discountType: data.discountType ?? 'NONE',
+          discountValue:
+            data.discountValue !== undefined && data.discountValue !== null
+              ? new Prisma.Decimal(data.discountValue)
+              : new Prisma.Decimal(0),
+          specialOffer: data.specialOffer ?? false,
+          mrp:
+            data.mrp !== undefined && data.mrp !== null
+              ? new Prisma.Decimal(data.mrp)
+              : null,
           status: data.status ?? 'DRAFT',
           isFeatured: data.isFeatured ?? false,
           metaTitle: data.metaTitle,
@@ -263,6 +278,25 @@ export class PrismaProductsRepository implements IProductsRepository {
           ...(data.description !== undefined ? { description: data.description } : {}),
           ...(data.shortDescription !== undefined ? { shortDescription: data.shortDescription } : {}),
           ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+          ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
+          ...(data.freeShipping !== undefined ? { freeShipping: data.freeShipping } : {}),
+          ...(data.inventoryType !== undefined ? { inventoryType: data.inventoryType } : {}),
+          ...(data.specifications !== undefined
+            ? { specifications: data.specifications as Prisma.InputJsonValue }
+            : {}),
+          ...(data.discountType !== undefined ? { discountType: data.discountType } : {}),
+          ...(data.discountValue !== undefined
+            ? {
+                discountValue:
+                  data.discountValue !== null
+                    ? new Prisma.Decimal(data.discountValue)
+                    : new Prisma.Decimal(0),
+              }
+            : {}),
+          ...(data.specialOffer !== undefined ? { specialOffer: data.specialOffer } : {}),
+          ...(data.mrp !== undefined
+            ? { mrp: data.mrp !== null ? new Prisma.Decimal(data.mrp) : null }
+            : {}),
           ...(data.status !== undefined ? { status: data.status } : {}),
           ...(data.isFeatured !== undefined ? { isFeatured: data.isFeatured } : {}),
           ...(data.metaTitle !== undefined ? { metaTitle: data.metaTitle } : {}),
@@ -429,7 +463,13 @@ export class PrismaProductsRepository implements IProductsRepository {
   async createImage(data: {
     productId: string;
     variantId?: string | null;
+    slot?: ProductImageSlot;
     url: string;
+    publicId?: string | null;
+    width?: number | null;
+    height?: number | null;
+    format?: string | null;
+    bytes?: number | null;
     altText?: string | null;
     isPrimary?: boolean;
     sortOrder?: number;
@@ -438,12 +478,32 @@ export class PrismaProductsRepository implements IProductsRepository {
       data: {
         productId: data.productId,
         variantId: data.variantId ?? null,
+        slot: data.slot ?? 'GALLERY',
         url: data.url,
+        publicId: data.publicId ?? null,
+        width: data.width ?? null,
+        height: data.height ?? null,
+        format: data.format ?? null,
+        bytes: data.bytes ?? null,
         altText: data.altText ?? null,
         isPrimary: data.isPrimary ?? false,
         sortOrder: data.sortOrder ?? 0,
       },
-    });
+    }) as unknown as Promise<ProductImageEntity>;
+  }
+
+  async findImagesBySlot(productId: string, slot: ProductImageSlot): Promise<ProductImageEntity[]> {
+    return prisma.productImage.findMany({
+      where: { productId, slot },
+      orderBy: { sortOrder: 'asc' },
+    }) as unknown as Promise<ProductImageEntity[]>;
+  }
+
+  async findImagesByProductId(productId: string): Promise<ProductImageEntity[]> {
+    return prisma.productImage.findMany({
+      where: { productId },
+      orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+    }) as unknown as Promise<ProductImageEntity[]>;
   }
 
   async updateImage(

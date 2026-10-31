@@ -6,23 +6,32 @@ import type {
   AdminVariantDto,
   CreateProductDto,
   CreateVariantInput,
+  DiscountType,
   IProductsRepository,
   ProductEntity,
+  ProductImageEntity,
+  ProductImageSlot,
   ProductQueryFilter,
   ProductVariantEntity,
   PublicProductDto,
+  PublicProductImageDto,
+  ProductPricingDto,
   PublicVariantDto,
   UpdateProductDto,
   UpdateVariantDto,
-  ProductImageEntity,
 } from './products.types';
+import { calculatePricing } from './products.pricing';
 import { productsRepository as defaultProductsRepo } from './products.repository';
 import type { ICategoriesRepository } from '@/modules/categories/categories.types';
 import { categoriesRepository as defaultCategoriesRepo } from '@/modules/categories/categories.repository';
 import type { IAuditService } from '@/services/audit.service';
 import { auditService as defaultAuditService } from '@/services/audit.service';
 import type { AccessTokenPayload } from '@/utils/jwt.util';
-import { storageService as defaultStorageService, type StorageService } from '@/services/storage.service';
+import {
+  getResponsiveImageUrls,
+  storageService as defaultStorageService,
+  type StorageService,
+} from '@/services/storage.service';
 
 export class ProductsService {
   constructor(
@@ -62,6 +71,23 @@ export class ProductsService {
     return isNaN(num) ? '0.00' : num.toFixed(2);
   }
 
+  private formatPricing(p: ProductEntity): ProductPricingDto | undefined {
+    if (!p.mrp) return undefined;
+    const calc = calculatePricing({
+      mrp: p.mrp,
+      discountType: (p.discountType as DiscountType) ?? 'NONE',
+      discountValue: p.discountValue ?? 0,
+    });
+    return {
+      mrp: calc.mrp.toFixed(2),
+      discountType: calc.discountType,
+      discountValue: calc.discountValue.toFixed(2),
+      discountAmount: calc.discountAmount.toFixed(2),
+      sellingPrice: calc.sellingPrice.toFixed(2),
+      warnings: calc.warnings,
+    };
+  }
+
   /**
    * Format public variant DTO — Strips costPrice completely
    */
@@ -86,6 +112,8 @@ export class ProductsService {
       .filter(v => v.isActive && !v.deletedAt)
       .map(v => this.formatPublicVariant(v));
 
+    const pricing = this.formatPricing(p);
+
     return {
       id: p.id,
       name: p.name,
@@ -100,6 +128,12 @@ export class ProductsService {
             slug: p.category.slug,
           }
         : undefined,
+      videoUrl: p.videoUrl ?? null,
+      freeShipping: p.freeShipping ?? false,
+      specialOffer: p.specialOffer ?? false,
+      inventoryType: p.inventoryType ?? 'READY_STOCK',
+      specifications: (p.specifications as Record<string, unknown>) ?? {},
+      pricing,
       isFeatured: p.isFeatured,
       metaTitle: p.metaTitle,
       metaDescription: p.metaDescription,
@@ -107,7 +141,14 @@ export class ProductsService {
       variants: activeVariants,
       images: (p.images ?? []).map(img => ({
         id: img.id,
+        slot: img.slot ?? 'GALLERY',
         url: img.url,
+        publicId: img.publicId ?? null,
+        width: img.width ?? null,
+        height: img.height ?? null,
+        format: img.format ?? null,
+        bytes: img.bytes ?? null,
+        responsiveUrls: getResponsiveImageUrls(img.url, img.publicId),
         altText: img.altText,
         isPrimary: img.isPrimary,
         sortOrder: img.sortOrder,
@@ -130,6 +171,8 @@ export class ProductsService {
       updatedAt: v.updatedAt,
     }));
 
+    const pricing = this.formatPricing(p);
+
     return {
       id: p.id,
       name: p.name,
@@ -138,6 +181,12 @@ export class ProductsService {
       shortDescription: p.shortDescription,
       categoryId: p.categoryId,
       category: p.category,
+      videoUrl: p.videoUrl ?? null,
+      freeShipping: p.freeShipping ?? false,
+      specialOffer: p.specialOffer ?? false,
+      inventoryType: p.inventoryType ?? 'READY_STOCK',
+      specifications: (p.specifications as Record<string, unknown>) ?? {},
+      pricing,
       status: p.status,
       isFeatured: p.isFeatured,
       metaTitle: p.metaTitle,
@@ -150,7 +199,14 @@ export class ProductsService {
       variants,
       images: (p.images ?? []).map(img => ({
         id: img.id,
+        slot: img.slot ?? 'GALLERY',
         url: img.url,
+        publicId: img.publicId ?? null,
+        width: img.width ?? null,
+        height: img.height ?? null,
+        format: img.format ?? null,
+        bytes: img.bytes ?? null,
+        responsiveUrls: getResponsiveImageUrls(img.url, img.publicId),
         altText: img.altText,
         isPrimary: img.isPrimary,
         sortOrder: img.sortOrder,
@@ -304,6 +360,48 @@ export class ProductsService {
     const existing = await this.repo.findById(id);
     if (!existing) {
       throw AppError.notFound('Product not found');
+    }
+
+    if (status === 'ACTIVE') {
+      const missingFields: string[] = [];
+
+      // 1. Thumbnail required
+      const thumbnails = await this.repo.findImagesBySlot(id, 'THUMBNAIL');
+      if (!thumbnails || thumbnails.length === 0) {
+        missingFields.push('thumbnail image');
+      }
+
+      // 2. Category required and active
+      if (!existing.categoryId) {
+        missingFields.push('category');
+      } else {
+        const cat = await this.categoriesRepo.findById(existing.categoryId);
+        if (!cat || !cat.isActive || cat.deletedAt) {
+          missingFields.push('active category');
+        }
+      }
+
+      // 3. At least one active variant with SKU
+      const activeVariants = (existing.variants ?? []).filter(
+        v => v.isActive && !v.deletedAt && v.sku && v.sku.trim().length > 0,
+      );
+      if (activeVariants.length === 0) {
+        missingFields.push('at least one active variant with SKU');
+      }
+
+      // 4. Valid price > 0
+      const hasValidPrice =
+        (existing.mrp && Number(existing.mrp) > 0) ||
+        activeVariants.some(v => Number(v.price) > 0);
+      if (!hasValidPrice) {
+        missingFields.push('valid price greater than 0');
+      }
+
+      if (missingFields.length > 0) {
+        throw AppError.badRequest(
+          `Cannot publish product to ACTIVE. Missing required fields: ${missingFields.join(', ')}`,
+        );
+      }
     }
 
     const updated = await this.repo.updateStatus(id, status);
@@ -722,7 +820,116 @@ export class ProductsService {
   }
 
   /**
-   * Admin: Delete product image (DB + storage deletion)
+   * Admin: Upload slot-based product image (THUMBNAIL, BACKVIEW, GALLERY)
+   * - THUMBNAIL: Replaces existing thumbnail (destroys old from storage, deletes old DB row)
+   * - BACKVIEW: Replaces existing backview (destroys old from storage, deletes old DB row)
+   * - GALLERY: Enforces maximum 4 total images limit
+   */
+  async uploadSlotImage(
+    productId: string,
+    slot: ProductImageSlot,
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+    actor?: AccessTokenPayload,
+  ): Promise<PublicProductImageDto> {
+    const product = await this.repo.findById(productId);
+    if (!product) {
+      throw AppError.notFound('Product not found');
+    }
+
+    if (slot === 'THUMBNAIL') {
+      const existing = await this.repo.findImagesBySlot(productId, 'THUMBNAIL');
+      for (const old of existing) {
+        await this.repo.deleteImage(old.id);
+        const storageKey =
+          old.publicId ||
+          (old.url.startsWith('/uploads/') ? old.url.replace('/uploads/', '') : old.url);
+        try {
+          await this.storageSvc.deleteImage(storageKey);
+        } catch (err) {
+          logger.warn(
+            { event: 'pendingStorageCleanup', publicId: old.publicId, productId, slot: 'THUMBNAIL', err },
+            'Previous thumbnail storage cleanup failed',
+          );
+        }
+      }
+    } else if (slot === 'BACKVIEW') {
+      const existing = await this.repo.findImagesBySlot(productId, 'BACKVIEW');
+      for (const old of existing) {
+        await this.repo.deleteImage(old.id);
+        const storageKey =
+          old.publicId ||
+          (old.url.startsWith('/uploads/') ? old.url.replace('/uploads/', '') : old.url);
+        try {
+          await this.storageSvc.deleteImage(storageKey);
+        } catch (err) {
+          logger.warn(
+            { event: 'pendingStorageCleanup', publicId: old.publicId, productId, slot: 'BACKVIEW', err },
+            'Previous backview storage cleanup failed',
+          );
+        }
+      }
+    } else if (slot === 'GALLERY') {
+      const existing = await this.repo.findImagesBySlot(productId, 'GALLERY');
+      if (existing.length >= 4) {
+        throw AppError.badRequest('Maximum 4 gallery images allowed per product');
+      }
+    }
+
+    const folder = `diano/products/${productId}/${slot.toLowerCase()}`;
+    const uploadResult = await this.storageSvc.uploadImage(file, folder);
+
+    const isPrimary = slot === 'THUMBNAIL';
+    if (isPrimary) {
+      await this.repo.unsetPrimaryImages(productId);
+    }
+
+    const existingSlotImages = await this.repo.findImagesBySlot(productId, slot);
+    const sortOrder = existingSlotImages.length;
+
+    const img = await this.repo.createImage({
+      productId,
+      slot,
+      url: uploadResult.url,
+      publicId: uploadResult.publicId ?? uploadResult.key,
+      width: uploadResult.width ?? null,
+      height: uploadResult.height ?? null,
+      format: uploadResult.format ?? null,
+      bytes: uploadResult.bytes ?? null,
+      altText: `${product.name} - ${slot.toLowerCase()}`,
+      isPrimary,
+      sortOrder,
+    });
+
+    if (actor) {
+      await this.auditSvc.record({
+        actorId: actor.userId,
+        actorType: 'USER',
+        action: `PRODUCT_IMAGE_UPLOADED_${slot}`,
+        targetType: 'PRODUCT',
+        targetId: productId,
+        metadata: { slot, publicId: img.publicId, url: img.url },
+      });
+    }
+
+    return {
+      id: img.id,
+      slot: img.slot,
+      url: img.url,
+      publicId: img.publicId,
+      width: img.width,
+      height: img.height,
+      format: img.format,
+      bytes: img.bytes,
+      responsiveUrls: getResponsiveImageUrls(img.url, img.publicId),
+      altText: img.altText,
+      isPrimary: img.isPrimary,
+      sortOrder: img.sortOrder,
+      variantId: img.variantId,
+    };
+  }
+
+  /**
+   * Admin: Delete product image (DB + storage deletion with orphan cleanup logging)
    */
   async deleteProductImage(imageId: string, actor?: AccessTokenPayload): Promise<void> {
     const image = await this.repo.findImageById(imageId);
@@ -732,10 +939,23 @@ export class ProductsService {
 
     await this.repo.deleteImage(imageId);
 
-    const storageKey = image.url.startsWith('/uploads/')
-      ? image.url.replace('/uploads/', '')
-      : image.url;
-    await this.storageSvc.deleteImage(storageKey);
+    const storageKey =
+      image.publicId ||
+      (image.url.startsWith('/uploads/') ? image.url.replace('/uploads/', '') : image.url);
+    try {
+      await this.storageSvc.deleteImage(storageKey);
+    } catch (err) {
+      logger.warn(
+        {
+          event: 'pendingStorageCleanup',
+          publicId: image.publicId,
+          productId: image.productId,
+          slot: image.slot,
+          err,
+        },
+        'Cloudinary destroy failed on image deletion; logged for pending cleanup',
+      );
+    }
 
     if (actor) {
       await this.auditSvc.record({
@@ -744,13 +964,13 @@ export class ProductsService {
         action: 'PRODUCT_IMAGE_DELETED',
         targetType: 'PRODUCT_IMAGE',
         targetId: imageId,
-        metadata: { url: image.url },
+        metadata: { slot: image.slot, publicId: image.publicId, url: image.url },
       });
     }
   }
 
   /**
-   * Admin: Batch reorder product images
+   * Admin: Batch reorder product images (GALLERY only)
    */
   async reorderProductImages(
     productId: string,
@@ -760,6 +980,19 @@ export class ProductsService {
     const product = await this.repo.findById(productId);
     if (!product) {
       throw AppError.notFound('Product not found');
+    }
+
+    const allImages = await this.repo.findImagesByProductId(productId);
+    const imageMap = new Map(allImages.map(img => [img.id, img]));
+
+    for (const item of items) {
+      const img = imageMap.get(item.id);
+      if (!img) {
+        throw AppError.badRequest(`Image ${item.id} does not belong to this product`);
+      }
+      if (img.slot !== 'GALLERY') {
+        throw AppError.badRequest('Only gallery images can be reordered');
+      }
     }
 
     await this.repo.reorderImages(items);

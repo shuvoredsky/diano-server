@@ -142,6 +142,45 @@ export class ProductsController {
     return ApiResponse.success(res, 'Variant deleted successfully', deleted);
   };
 
+  uploadThumbnail = async (req: Request, res: Response): Promise<Response> => {
+    if (!req.file) {
+      throw AppError.badRequest('No image file provided for thumbnail upload');
+    }
+    const image = await this.service.uploadSlotImage(
+      req.params.id as string,
+      'THUMBNAIL',
+      req.file,
+      req.user,
+    );
+    return ApiResponse.created(res, 'Thumbnail image uploaded successfully', image);
+  };
+
+  uploadBackview = async (req: Request, res: Response): Promise<Response> => {
+    if (!req.file) {
+      throw AppError.badRequest('No image file provided for backview upload');
+    }
+    const image = await this.service.uploadSlotImage(
+      req.params.id as string,
+      'BACKVIEW',
+      req.file,
+      req.user,
+    );
+    return ApiResponse.created(res, 'Backview image uploaded successfully', image);
+  };
+
+  uploadGallery = async (req: Request, res: Response): Promise<Response> => {
+    if (!req.file) {
+      throw AppError.badRequest('No image file provided for gallery upload');
+    }
+    const image = await this.service.uploadSlotImage(
+      req.params.id as string,
+      'GALLERY',
+      req.file,
+      req.user,
+    );
+    return ApiResponse.created(res, 'Gallery image uploaded successfully', image);
+  };
+
   uploadImages = async (req: Request, res: Response): Promise<Response> => {
     const files = req.files as Express.Multer.File[] | undefined;
     if (!files || files.length === 0) {

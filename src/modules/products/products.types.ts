@@ -1,6 +1,19 @@
 import type { Decimal } from 'decimal.js';
+import type { ResponsiveImageUrls } from '@/services/storage.service';
 
 export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+export type ProductImageSlot = 'THUMBNAIL' | 'BACKVIEW' | 'GALLERY';
+export type InventoryType = 'READY_STOCK' | 'PRE_ORDER' | 'MADE_TO_ORDER';
+export type DiscountType = 'NONE' | 'PERCENTAGE' | 'FIXED';
+
+export interface ProductPricingDto {
+  mrp: string;
+  discountType: DiscountType;
+  discountValue: string;
+  discountAmount: string;
+  sellingPrice: string;
+  warnings?: string[];
+}
 
 export interface ProductVariantEntity {
   id: string;
@@ -22,7 +35,13 @@ export interface ProductImageEntity {
   id: string;
   productId: string;
   variantId: string | null;
+  slot: ProductImageSlot;
   url: string;
+  publicId?: string | null;
+  width?: number | null;
+  height?: number | null;
+  format?: string | null;
+  bytes?: number | null;
   altText: string | null;
   isPrimary: boolean;
   sortOrder: number;
@@ -36,6 +55,14 @@ export interface ProductEntity {
   description: string;
   shortDescription: string | null;
   categoryId: string;
+  videoUrl?: string | null;
+  freeShipping?: boolean;
+  inventoryType?: InventoryType;
+  specifications?: Record<string, unknown>;
+  discountType?: DiscountType;
+  discountValue?: Decimal | string | null;
+  specialOffer?: boolean;
+  mrp?: Decimal | string | null;
   status: string;
   isFeatured: boolean;
   metaTitle: string | null;
@@ -55,7 +82,15 @@ export interface ProductEntity {
   variants?: ProductVariantEntity[];
   images?: ProductImageEntity[];
   tags?: Array<{ tag: { id: string; name: string; slug: string } }>;
-  relatedTo?: Array<{ relatedProduct: { id: string; name: string; slug: string; isFeatured: boolean; status: string } }>;
+  relatedTo?: Array<{
+    relatedProduct: {
+      id: string;
+      name: string;
+      slug: string;
+      isFeatured: boolean;
+      status: string;
+    };
+  }>;
 }
 
 export interface PublicVariantDto {
@@ -67,6 +102,22 @@ export interface PublicVariantDto {
   compareAtPrice: string | null;
   attributes: Record<string, unknown>;
   isActive: boolean;
+}
+
+export interface PublicProductImageDto {
+  id: string;
+  slot: ProductImageSlot;
+  url: string;
+  publicId?: string | null;
+  width?: number | null;
+  height?: number | null;
+  format?: string | null;
+  bytes?: number | null;
+  responsiveUrls?: ResponsiveImageUrls;
+  altText: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
+  variantId: string | null;
 }
 
 export interface PublicProductDto {
@@ -81,19 +132,18 @@ export interface PublicProductDto {
     name: string;
     slug: string;
   };
+  videoUrl: string | null;
+  freeShipping: boolean;
+  specialOffer: boolean;
+  inventoryType: InventoryType;
+  specifications: Record<string, unknown>;
+  pricing?: ProductPricingDto;
   isFeatured: boolean;
   metaTitle: string | null;
   metaDescription: string | null;
   metaKeywords: string | null;
   variants: PublicVariantDto[];
-  images: Array<{
-    id: string;
-    url: string;
-    altText: string | null;
-    isPrimary: boolean;
-    sortOrder: number;
-    variantId: string | null;
-  }>;
+  images: PublicProductImageDto[];
   tags: string[];
   createdAt: Date;
 }
@@ -131,6 +181,15 @@ export interface CreateProductDto {
   description: string;
   shortDescription?: string | null;
   categoryId: string;
+  subcategoryId?: string | null;
+  videoUrl?: string | null;
+  freeShipping?: boolean;
+  inventoryType?: InventoryType;
+  specifications?: Record<string, unknown>;
+  discountType?: DiscountType;
+  discountValue?: number | string | null;
+  specialOffer?: boolean;
+  mrp?: number | string | null;
   status?: ProductStatus;
   isFeatured?: boolean;
   metaTitle?: string | null;
@@ -147,6 +206,15 @@ export interface UpdateProductDto {
   description?: string;
   shortDescription?: string | null;
   categoryId?: string;
+  subcategoryId?: string | null;
+  videoUrl?: string | null;
+  freeShipping?: boolean;
+  inventoryType?: InventoryType;
+  specifications?: Record<string, unknown>;
+  discountType?: DiscountType;
+  discountValue?: number | string | null;
+  specialOffer?: boolean;
+  mrp?: number | string | null;
   status?: ProductStatus;
   isFeatured?: boolean;
   metaTitle?: string | null;
@@ -214,7 +282,13 @@ export interface IProductsRepository {
   createImage(data: {
     productId: string;
     variantId?: string | null;
+    slot?: ProductImageSlot;
     url: string;
+    publicId?: string | null;
+    width?: number | null;
+    height?: number | null;
+    format?: string | null;
+    bytes?: number | null;
     altText?: string | null;
     isPrimary?: boolean;
     sortOrder?: number;
@@ -224,6 +298,8 @@ export interface IProductsRepository {
     data: { altText?: string | null; isPrimary?: boolean; sortOrder?: number },
   ): Promise<ProductImageEntity>;
   findImageById(imageId: string): Promise<ProductImageEntity | null>;
+  findImagesBySlot(productId: string, slot: ProductImageSlot): Promise<ProductImageEntity[]>;
+  findImagesByProductId(productId: string): Promise<ProductImageEntity[]>;
   deleteImage(imageId: string): Promise<void>;
   unsetPrimaryImages(productId: string): Promise<void>;
   reorderImages(items: Array<{ id: string; sortOrder: number }>): Promise<void>;

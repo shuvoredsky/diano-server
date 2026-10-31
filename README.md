@@ -78,6 +78,19 @@ Ensure strong secrets are defined for `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
 | `npm test` | Runs all Vitest test suites |
 | `npm run test:watch` | Runs Vitest in interactive watch mode |
 | `npm run prisma:generate`| Generates Prisma client types |
+| `npm run storage:check` | Diagnostics: Tests Cloudinary credentials, uploads a probe image, and verifies cleanup |
+
+---
+
+## ☁️ Storage Diagnostics (Cloudinary)
+
+To safely verify Cloudinary signed upload and deletion without leaking credentials:
+```bash
+npm run storage:check
+```
+- **If configured:** Uploads a 1x1 probe image to `diano/diagnostics`, prints the generated secure URL and responsive variants, and immediately destroys the test asset.
+- **If not configured:** Prints a clean diagnostic message and exits without error.
+- **Security:** Secret keys and API secrets are never output or logged.
 
 ---
 
