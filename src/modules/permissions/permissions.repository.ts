@@ -1,7 +1,9 @@
 import { prisma } from '@/config/database';
+import type { Permission } from '@prisma/client';
 
 export interface IPermissionsRepository {
   getPermissionsByRoles(roleSlugs: string[]): Promise<string[]>;
+  getAllPermissions(): Promise<Permission[]>;
 }
 
 export class PrismaPermissionsRepository implements IPermissionsRepository {
@@ -20,6 +22,12 @@ export class PrismaPermissionsRepository implements IPermissionsRepository {
     });
 
     return rolePermissions.map(rp => rp.permission.slug);
+  }
+
+  async getAllPermissions(): Promise<Permission[]> {
+    return prisma.permission.findMany({
+      orderBy: [{ resource: 'asc' }, { action: 'asc' }],
+    });
   }
 }
 

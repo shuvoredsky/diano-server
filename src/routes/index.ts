@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { healthRouter } from './health.routes';
 import { authRouter } from '@/modules/auth/auth.routes';
 import { usersRouter } from '@/modules/users/users.routes';
+import { rolesRouter } from '@/modules/roles/roles.routes';
+import { permissionsRouter } from '@/modules/permissions/permissions.routes';
 
 const rootRouter = Router();
 
@@ -14,5 +16,10 @@ rootRouter.use('/auth', authRouter);
 // User Management (Admin)
 rootRouter.use('/users', usersRouter);
 
+// RBAC Roles & Permissions
+rootRouter.use('/roles', rolesRouter);
+rootRouter.use('/permissions', permissionsRouter);
+
 export { rootRouter };
+
 
