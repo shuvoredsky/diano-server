@@ -1,0 +1,10 @@
+// Prisma Schema for DIANO Backend (Prisma 7)
+// Datasource configuration is managed in prisma.config.ts
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
