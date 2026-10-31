@@ -4,8 +4,8 @@ import type { IAuthRepository, UserWithRoles, RequestMetadata } from '@/modules/
 import type { IEmailService } from '@/services/email.service';
 import type { IAuditService } from '@/services/audit.service';
 import { hashPassword } from '@/utils/password.util';
+import * as passwordUtil from '@/utils/password.util';
 import { hashToken } from '@/utils/token.util';
-import bcrypt from 'bcrypt';
 
 describe('AuthService (Unit Tests with Mocked Repository)', () => {
   let authService: AuthService;
@@ -243,11 +243,12 @@ describe('AuthService (Unit Tests with Mocked Repository)', () => {
 
     it('should rehash password on login if cost factor is outdated', async () => {
       const password = 'Password123!';
-      // Create hash with 6 rounds (outdated)
-      const lowCostHash = await bcrypt.hash(password, 6);
-      const user = createMockUser({ passwordHash: lowCostHash });
+      const hash = await hashPassword(password);
+      const user = createMockUser({ passwordHash: hash });
 
       mockRepo.findUserByEmail.mockResolvedValue(user);
+
+      const spy = vi.spyOn(passwordUtil, 'needsRehash').mockReturnValueOnce(true);
 
       await authService.login({ email: user.email, password }, mockMeta);
 
@@ -255,6 +256,8 @@ describe('AuthService (Unit Tests with Mocked Repository)', () => {
         user.id,
         expect.objectContaining({ passwordHash: expect.any(String) }),
       );
+
+      spy.mockRestore();
     });
 
     it('should allow admin login only for administrative roles', async () => {

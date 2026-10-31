@@ -11,7 +11,7 @@ export const variantInputSchema = z
       .max(64)
       .regex(/^[A-Za-z0-9-_]+$/, 'SKU must contain alphanumeric characters, hyphens or underscores'),
     barcode: z.string().trim().max(64).nullable().optional(),
-    price: z.coerce.number().positive('Price must be greater than 0'),
+    price: z.coerce.number().positive('Price must be greater than 0').optional(),
     compareAtPrice: z.coerce.number().positive('Compare at price must be positive').nullable().optional(),
     costPrice: z.coerce.number().min(0, 'Cost price cannot be negative').nullable().optional(),
     attributes: z.record(z.string(), z.unknown()).optional().default({}),
@@ -20,7 +20,11 @@ export const variantInputSchema = z
   .strict()
   .refine(
     data => {
-      if (data.compareAtPrice !== undefined && data.compareAtPrice !== null) {
+      if (
+        data.price !== undefined &&
+        data.compareAtPrice !== undefined &&
+        data.compareAtPrice !== null
+      ) {
         return data.compareAtPrice >= data.price;
       }
       return true;
@@ -108,7 +112,24 @@ export const createProductSchema = z
     relatedProductIds: z.array(z.string().trim()).optional().default([]),
     variants: z.array(variantInputSchema).min(1, 'At least one product variant is required'),
   })
-  .strict();
+  .strict()
+  .refine(
+    data => {
+      for (const v of data.variants) {
+        if (v.price === undefined || v.price === null) {
+          const effectiveMrp = v.compareAtPrice ?? data.mrp;
+          if (!effectiveMrp || Number(effectiveMrp) <= 0) {
+            return false;
+          }
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Product MRP or Variant compareAtPrice is required when variant price is not explicitly specified',
+      path: ['mrp'],
+    },
+  );
 
 export const updateProductSchema = z
   .object({

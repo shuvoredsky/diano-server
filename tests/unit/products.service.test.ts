@@ -341,4 +341,196 @@ describe('ProductsService (Unit Tests with Mocked Repository)', () => {
       );
     });
   });
+
+  describe('Pricing Source of Truth & Variant Price Recomputation', () => {
+    it('should automatically compute variant price on createProduct if variant price is omitted', async () => {
+      vi.spyOn(mockCategoriesRepo, 'findById').mockResolvedValue({
+        id: 'cat-1',
+        name: 'Shirts',
+        slug: 'shirts',
+        isActive: true,
+        deletedAt: null,
+        parentId: null,
+      } as CategoryEntity);
+
+      const createdProduct: ProductEntity = {
+        ...sampleProduct,
+        mrp: '1000.00',
+        discountType: 'PERCENTAGE',
+        discountValue: '20.00',
+        variants: [
+          {
+            ...sampleVariant,
+            price: '800.00',
+            compareAtPrice: '1000.00',
+          },
+        ],
+      };
+
+      vi.spyOn(mockProductsRepo, 'create').mockResolvedValue(createdProduct);
+
+      await service.createProduct(
+        {
+          name: 'Discounted Shirt',
+          description: 'A fine premium cotton shirt with good discount',
+          categoryId: 'cat-1',
+          mrp: 1000,
+          discountType: 'PERCENTAGE',
+          discountValue: 20,
+          variants: [
+            {
+              name: 'Medium',
+              sku: 'SHIRT-M',
+              // price omitted!
+            },
+          ],
+        },
+        mockAdminActor,
+      );
+
+      // Verify that create was called with computed variant price of 800 and compareAtPrice 1000
+      expect(mockProductsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variants: [
+            expect.objectContaining({
+              sku: 'SHIRT-M',
+              price: 800,
+              compareAtPrice: 1000,
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should allow variant-level price override on createProduct', async () => {
+      vi.spyOn(mockCategoriesRepo, 'findById').mockResolvedValue({
+        id: 'cat-1',
+        name: 'Shirts',
+        slug: 'shirts',
+        isActive: true,
+        deletedAt: null,
+        parentId: null,
+      } as CategoryEntity);
+
+      const createdProduct: ProductEntity = {
+        ...sampleProduct,
+        mrp: '1000.00',
+        variants: [
+          {
+            ...sampleVariant,
+            price: '750.00',
+            compareAtPrice: '1000.00',
+          },
+        ],
+      };
+
+      vi.spyOn(mockProductsRepo, 'create').mockResolvedValue(createdProduct);
+
+      await service.createProduct(
+        {
+          name: 'Overridden Shirt',
+          description: 'A fine cotton shirt with custom variant price',
+          categoryId: 'cat-1',
+          mrp: 1000,
+          variants: [
+            {
+              name: 'Large',
+              sku: 'SHIRT-L',
+              price: 750, // explicit override
+            },
+          ],
+        },
+        mockAdminActor,
+      );
+
+      expect(mockProductsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variants: [
+            expect.objectContaining({
+              sku: 'SHIRT-L',
+              price: 750,
+              compareAtPrice: 1000,
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should recompute variant prices via calculatePricing when product discount is updated', async () => {
+      const productWithVariants: ProductEntity = {
+        ...sampleProduct,
+        mrp: '1000.00',
+        discountType: 'NONE',
+        discountValue: '0.00',
+        variants: [
+          {
+            ...sampleVariant,
+            id: 'var-1',
+            price: '1000.00',
+            compareAtPrice: '1000.00',
+          },
+        ],
+      };
+
+      vi.spyOn(mockProductsRepo, 'findById').mockResolvedValue(productWithVariants);
+      vi.spyOn(mockProductsRepo, 'update').mockResolvedValue({
+        ...productWithVariants,
+        discountType: 'PERCENTAGE',
+        discountValue: '15.00',
+      });
+      vi.spyOn(mockProductsRepo, 'updateVariant').mockResolvedValue(sampleVariant);
+
+      await service.updateProduct(
+        'prod-1',
+        {
+          discountType: 'PERCENTAGE',
+          discountValue: 15,
+        },
+        mockAdminActor,
+      );
+
+      // Variant price should be recomputed to 1000 - 15% = 850.00
+      expect(mockProductsRepo.updateVariant).toHaveBeenCalledWith('var-1', {
+        price: 850,
+        compareAtPrice: 1000,
+      });
+    });
+
+    it('should compute variant price from product defaults when addVariant omits price', async () => {
+      const baseProduct: ProductEntity = {
+        ...sampleProduct,
+        mrp: '2000.00',
+        discountType: 'FIXED',
+        discountValue: '300.00',
+      };
+
+      vi.spyOn(mockProductsRepo, 'findById').mockResolvedValue(baseProduct);
+      vi.spyOn(mockProductsRepo, 'findBySku').mockResolvedValue(null);
+      vi.spyOn(mockProductsRepo, 'createVariant').mockResolvedValue({
+        ...sampleVariant,
+        price: '1700.00',
+        compareAtPrice: '2000.00',
+      });
+
+      await service.addVariant(
+        'prod-1',
+        {
+          name: 'Extra Large',
+          sku: 'SHIRT-XL',
+          // price omitted!
+        },
+        mockAdminActor,
+      );
+
+      // 2000 - 300 = 1700
+      expect(mockProductsRepo.createVariant).toHaveBeenCalledWith(
+        'prod-1',
+        expect.objectContaining({
+          sku: 'SHIRT-XL',
+          price: 1700,
+          compareAtPrice: 2000,
+        }),
+      );
+    });
+  });
 });

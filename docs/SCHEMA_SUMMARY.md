@@ -157,17 +157,29 @@ CREATE INDEX IF NOT EXISTS "idx_product_description_trgm" ON "Product" USING gin
 
 ---
 
-## 4. Pricing & MRP Architecture (M5b Clear Field Mapping)
+## 4. Pricing & MRP Architecture (M6 Pricing Source of Truth & Discount Rules)
 
-| Scope | Field | Purpose | Notes |
+### A. Field Mapping & Single Source of Truth
+| Scope | Field | Purpose | Source of Truth & Recomputation Policy |
 |:---|:---|:---|:---|
-| **Product Level** | `Product.mrp` | Catalog Base Maximum Retail Price | Top-level baseline reference price. |
-| **Product Level** | `Product.discountType` | Discount Engine Method (`NONE`, `PERCENTAGE`, `FIXED`) | Applied at product catalog level. |
+| **Product Level** | `Product.mrp` | Catalog Base Maximum Retail Price (MRP) | Top-level catalog baseline reference price (strike-through / reference). |
+| **Product Level** | `Product.discountType` | Discount Engine Method (`NONE`, `PERCENTAGE`, `FIXED`) | Applied at product catalog level as baseline default for all variants. |
 | **Product Level** | `Product.discountValue` | Discount Quantum (Decimal) | Percentage (e.g. 15%) or Fixed BDT (e.g. 200 BDT). |
-| **Product Level** | *(Dynamic)* `sellingPrice` | Effective Product Base Price | Computed server-side via `calculatePricing({ mrp, discountType, discountValue })`. Never stored directly to avoid stale state. |
-| **Variant Level** | `ProductVariant.compareAtPrice` | Variant-Specific MRP Override | Optional strike-through price if variant differs from base `Product.mrp`. |
-| **Variant Level** | `ProductVariant.price` | Variant Effective Selling Price | The actual checkout selling price for this specific SKU unit. |
-| **Variant Level** | `ProductVariant.costPrice` | Cost of Goods Sold (Internal / COGS) | Strictly hidden from public DTOs; visible only to admins with `product:view_cost`. |
+| **Product Level** | *(Dynamic)* `sellingPrice` | Effective Base Product Selling Price | Computed on-the-fly server-side via `calculatePricing({ mrp, discountType, discountValue })`. Never stored to avoid stale state. |
+| **Variant Level** | `ProductVariant.compareAtPrice` | Variant MRP / Strike-Through Price | Variant-specific MRP. If omitted on variant creation, inherits `Product.mrp`. |
+| **Variant Level** | `ProductVariant.price` | **Current Selling Price (Checkout Authority)** | **The definitive price stored in the database.** Orders and checkout carts **strictly read and charge `variant.price`**. Server calculates `variant.price = calculatePricing({ mrp: variant.compareAtPrice \|\| product.mrp, discountType, discountValue })`. Variant-level manual override is permitted during creation/editing. When `Product.mrp`, `Product.discountType`, or `Product.discountValue` changes, `calculatePricing` automatically recomputes and synchronizes all dependent variant prices so no stale pricing can exist. |
+| **Variant Level** | `ProductVariant.costPrice` | Cost of Goods Sold (Internal / COGS) | Strictly hidden from public DTOs; visible only to authenticated staff with `inventory:view_cost` or `product:view_cost`. Updated automatically via procurement weighted average costing upon purchase order receiving. |
+
+### B. Anti-Stacking Discount Rules
+1. **Discounts Strictly Do Not Stack:**
+   - Under no circumstances can product-level catalog discounts, flash sales, and standard coupon codes compound or cascade on top of each other.
+2. **Flash Sale Precedence:**
+   - When a `FlashSale` campaign is active for a product variant, the flash sale price takes complete precedence over the catalog discount.
+   - Catalog product discounts (`Product.discountType`/`discountValue`) and checkout coupon codes **do not apply** to items in an active flash sale.
+3. **Coupon Restrictions on Sale Items:**
+   - Coupons cannot be redeemed against flash sale items or discounted sale items unless the coupon explicitly has `allowOnSale: true` (e.g., clearance or special storewide promotions).
+4. **Order / Cart Single Price Contract:**
+   - Cart and Order modules never accept client-side pricing. They resolve `variant.price` directly from the database and verify against active campaign rules at execution time.
 
 ---
 

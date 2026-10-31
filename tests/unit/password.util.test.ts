@@ -6,7 +6,6 @@ import {
   isPasswordStrong,
   PASSWORD_REGEX,
 } from '@/utils/password.util';
-import bcrypt from 'bcrypt';
 
 describe('Password Util', () => {
   const strongPassword = 'SecurePassword123!';
@@ -25,13 +24,11 @@ describe('Password Util', () => {
   });
 
   it('should detect if a password hash needs rehashing', async () => {
-    // Generate a hash with lower rounds (e.g. 8 rounds when default is 10 or 12)
-    const lowRoundHash = await bcrypt.hash(strongPassword, 6);
-    expect(needsRehash(lowRoundHash)).toBe(true);
-
     const currentRoundHash = await hashPassword(strongPassword);
+    // Hash created with fewer rounds (e.g. 2 rounds) than currently configured
+    const lowRoundHash = '$2b$02$somearbitrarysaltandhashstring123456';
+    expect(needsRehash(lowRoundHash)).toBe(true);
     expect(needsRehash(currentRoundHash)).toBe(false);
-
     expect(needsRehash('invalid-hash')).toBe(true);
   });
 

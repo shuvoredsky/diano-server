@@ -302,6 +302,25 @@ export class ProductsService {
           throw AppError.badRequest(`Barcode '${v.barcode}' is already in use`);
         }
       }
+
+      // Ensure variant selling price is calculated via calculatePricing if not explicitly overridden
+      const variantMrp = v.compareAtPrice ?? dto.mrp;
+      if (variantMrp && Number(variantMrp) > 0) {
+        if (v.price === undefined || v.price === null || Number(v.price) <= 0) {
+          const calc = calculatePricing({
+            mrp: variantMrp,
+            discountType: dto.discountType ?? 'NONE',
+            discountValue: dto.discountValue ?? 0,
+            costPrice: v.costPrice ? Number(v.costPrice) : undefined,
+          });
+          v.price = Number(calc.sellingPrice.toFixed(2));
+        }
+        if (!v.compareAtPrice && dto.mrp) {
+          v.compareAtPrice = Number(dto.mrp);
+        }
+      } else if (v.price && !v.compareAtPrice) {
+        v.compareAtPrice = Number(v.price);
+      }
     }
 
     // 3. Generate unique slug
@@ -412,6 +431,40 @@ export class ProductsService {
       categoryId: leafCategoryId,
       slug,
     });
+
+    // Recompute variant selling prices if product-level pricing changed
+    const pricingChanged =
+      dto.mrp !== undefined || dto.discountType !== undefined || dto.discountValue !== undefined;
+    if (pricingChanged && existing.variants && existing.variants.length > 0) {
+      const effectiveMrp = dto.mrp !== undefined ? dto.mrp : existing.mrp;
+      const effectiveDiscountType =
+        (dto.discountType !== undefined ? dto.discountType : existing.discountType) as DiscountType ?? 'NONE';
+      const effectiveDiscountValue =
+        dto.discountValue !== undefined
+          ? Number(dto.discountValue)
+          : existing.discountValue
+            ? Number(existing.discountValue)
+            : 0;
+
+      for (const v of existing.variants) {
+        const vMrp = v.compareAtPrice ?? effectiveMrp;
+        if (vMrp && Number(vMrp) > 0) {
+          const calc = calculatePricing({
+            mrp: vMrp,
+            discountType: effectiveDiscountType,
+            discountValue: effectiveDiscountValue,
+            costPrice: v.costPrice ? Number(v.costPrice) : undefined,
+          });
+          const recomputedPrice = Number(calc.sellingPrice.toFixed(2));
+          if (Number(v.price) !== recomputedPrice) {
+            await this.repo.updateVariant(v.id, {
+              price: recomputedPrice,
+              compareAtPrice: vMrp ? Number(vMrp) : undefined,
+            });
+          }
+        }
+      }
+    }
 
     if (actor) {
       await this.auditSvc.record({
@@ -617,6 +670,25 @@ export class ProductsService {
       }
     }
 
+    // Ensure variant selling price is calculated via calculatePricing if not explicitly specified
+    const variantMrp = dto.compareAtPrice ?? product.mrp;
+    if (variantMrp && Number(variantMrp) > 0) {
+      if (dto.price === undefined || dto.price === null || Number(dto.price) <= 0) {
+        const calc = calculatePricing({
+          mrp: variantMrp,
+          discountType: (product.discountType as DiscountType) ?? 'NONE',
+          discountValue: product.discountValue ? Number(product.discountValue) : 0,
+          costPrice: dto.costPrice ? Number(dto.costPrice) : undefined,
+        });
+        dto.price = Number(calc.sellingPrice.toFixed(2));
+      }
+      if (!dto.compareAtPrice && product.mrp) {
+        dto.compareAtPrice = Number(product.mrp);
+      }
+    } else if (dto.price && !dto.compareAtPrice) {
+      dto.compareAtPrice = Number(dto.price);
+    }
+
     const variant = await this.repo.createVariant(productId, dto);
 
     if (actor) {
@@ -663,6 +735,28 @@ export class ProductsService {
       const existingBarcode = await this.repo.findByBarcode(dto.barcode);
       if (existingBarcode && existingBarcode.id !== variantId) {
         throw AppError.badRequest(`Barcode '${dto.barcode}' is already in use`);
+      }
+    }
+
+    if (
+      dto.compareAtPrice !== undefined &&
+      dto.compareAtPrice !== null &&
+      (dto.price === undefined || dto.price === null)
+    ) {
+      const product = await this.repo.findById(existing.productId);
+      if (product) {
+        const calc = calculatePricing({
+          mrp: dto.compareAtPrice,
+          discountType: (product.discountType as DiscountType) ?? 'NONE',
+          discountValue: product.discountValue ? Number(product.discountValue) : 0,
+          costPrice:
+            dto.costPrice !== undefined
+              ? (dto.costPrice ?? undefined)
+              : existing.costPrice !== null
+                ? Number(existing.costPrice)
+                : undefined,
+        });
+        dto.price = Number(calc.sellingPrice.toFixed(2));
       }
     }
 

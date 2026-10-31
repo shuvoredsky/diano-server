@@ -168,7 +168,7 @@ export interface CreateVariantInput {
   name: string;
   sku: string;
   barcode?: string | null;
-  price: number | string;
+  price?: number | string;
   compareAtPrice?: number | string | null;
   costPrice?: number | string | null;
   attributes?: Record<string, unknown>;
