@@ -1,4 +1,6 @@
 import { AppError } from '@/utils/app-error';
+import { viewDeduplicator } from '@/utils/view-dedupe.util';
+import { logger } from '@/utils/logger';
 import type {
   AdminProductDto,
   AdminVariantDto,
@@ -575,7 +577,7 @@ export class ProductsService {
   /**
    * Public: Get product by slug (only ACTIVE in active categories)
    */
-  async getPublicProductBySlug(slug: string): Promise<PublicProductDto> {
+  async getPublicProductBySlug(slug: string, clientIp?: string): Promise<PublicProductDto> {
     const product = await this.repo.findBySlug(slug);
     if (!product || product.status !== 'ACTIVE' || product.deletedAt) {
       throw AppError.notFound('Product not found');
@@ -586,8 +588,18 @@ export class ProductsService {
       throw AppError.notFound('Product not found');
     }
 
-    // Increment view count asynchronously
-    this.repo.incrementViewCount(product.id).catch(() => {});
+    // Increment view count asynchronously with IP deduplication
+    if (clientIp) {
+      try {
+        if (viewDeduplicator.shouldCountView(clientIp, product.id)) {
+          this.repo.incrementViewCount(product.id).catch((err) => {
+            logger.warn({ err, productId: product.id }, 'Async view count increment failed');
+          });
+        }
+      } catch (err) {
+        logger.warn({ err, productId: product.id }, 'View deduplication check failed');
+      }
+    }
 
     return this.formatPublicProduct(product);
   }

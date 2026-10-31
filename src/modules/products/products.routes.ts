@@ -83,6 +83,13 @@ productsRouter.delete(
 );
 
 // Image Gallery Management
+productsRouter.put(
+  '/:id/images/reorder',
+  authenticate,
+  requirePermission('product:update'),
+  productsController.reorderImages,
+);
+
 productsRouter.post(
   '/:id/images',
   authenticate,
@@ -103,13 +110,6 @@ productsRouter.delete(
   authenticate,
   requirePermission('product:delete'),
   productsController.deleteImage,
-);
-
-productsRouter.put(
-  '/:id/images/reorder',
-  authenticate,
-  requirePermission('product:update'),
-  productsController.reorderImages,
 );
 
 // Public Slug endpoints (placed after specific static segments)

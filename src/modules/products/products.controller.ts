@@ -33,7 +33,17 @@ export class ProductsController {
   };
 
   getPublicBySlug = async (req: Request, res: Response): Promise<Response> => {
-    const product = await this.service.getPublicProductBySlug(req.params.slug as string);
+    const forwarded = req.headers['x-forwarded-for'];
+    const clientIp =
+      (typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : undefined) ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      'unknown';
+
+    const product = await this.service.getPublicProductBySlug(
+      req.params.slug as string,
+      clientIp,
+    );
     return ApiResponse.success(res, 'Product details retrieved successfully', product);
   };
 

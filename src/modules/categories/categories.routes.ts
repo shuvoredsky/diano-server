@@ -5,16 +5,21 @@ import { handleUploadSingle } from '@/middlewares/upload.middleware';
 
 export const categoriesRouter = Router();
 
-// ================= Public Endpoints =================
+// ================= Fixed & Admin Endpoints (Must precede parameter routes) =================
 categoriesRouter.get('/', categoriesController.getPublicTree);
-categoriesRouter.get('/:slug', categoriesController.getPublicBySlug);
 
-// ================= Admin Endpoints =================
 categoriesRouter.get(
   '/admin/all',
   authenticate,
   requirePermission('category:read'),
   categoriesController.getAdminCategories,
+);
+
+categoriesRouter.put(
+  '/reorder',
+  authenticate,
+  requirePermission('category:update'),
+  categoriesController.reorderCategories,
 );
 
 categoriesRouter.get(
@@ -31,20 +36,7 @@ categoriesRouter.post(
   categoriesController.createCategory,
 );
 
-categoriesRouter.patch(
-  '/:id',
-  authenticate,
-  requirePermission('category:update'),
-  categoriesController.updateCategory,
-);
-
-categoriesRouter.delete(
-  '/:id',
-  authenticate,
-  requirePermission('category:delete'),
-  categoriesController.deleteCategory,
-);
-
+// ================= Parameterized Sub-resource Endpoints =================
 categoriesRouter.patch(
   '/:id/status',
   authenticate,
@@ -67,9 +59,19 @@ categoriesRouter.post(
   categoriesController.uploadImage,
 );
 
-categoriesRouter.put(
-  '/reorder',
+categoriesRouter.patch(
+  '/:id',
   authenticate,
   requirePermission('category:update'),
-  categoriesController.reorderCategories,
+  categoriesController.updateCategory,
 );
+
+categoriesRouter.delete(
+  '/:id',
+  authenticate,
+  requirePermission('category:delete'),
+  categoriesController.deleteCategory,
+);
+
+// ================= Public Slug Wildcard Endpoint (Registered after fixed routes) =================
+categoriesRouter.get('/:slug', categoriesController.getPublicBySlug);
