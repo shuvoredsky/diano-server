@@ -9,6 +9,7 @@ import {
   reorderCategoriesSchema,
   updateCategoryImageSchema,
   deleteCategoryQuerySchema,
+  updateSpecificationTemplateSchema,
 } from './categories.validation';
 
 export class CategoriesController {
@@ -96,6 +97,25 @@ export class CategoriesController {
     const input = reorderCategoriesSchema.parse(req.body);
     await this.service.reorderCategories(input.items, req.user);
     return ApiResponse.success(res, 'Categories reordered successfully');
+  };
+
+  getProductFormSchema = async (req: Request, res: Response): Promise<Response> => {
+    const schema = await this.service.getProductFormSchema(req.params.id as string);
+    return ApiResponse.success(res, 'Category product form schema retrieved successfully', schema);
+  };
+
+  updateSpecificationTemplate = async (req: Request, res: Response): Promise<Response> => {
+    const input = updateSpecificationTemplateSchema.parse(req.body);
+    const updated = await this.service.updateSpecificationTemplate(
+      req.params.id as string,
+      input.template,
+      req.user,
+    );
+    return ApiResponse.success(
+      res,
+      'Category specification template updated successfully',
+      updated,
+    );
   };
 }
 

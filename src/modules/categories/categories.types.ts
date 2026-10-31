@@ -1,3 +1,18 @@
+export interface SpecificationFieldDefinition {
+  key: string;
+  label: string;
+  type: 'text' | 'select' | 'number';
+  required: boolean;
+  options?: string[];
+  sortOrder: number;
+}
+
+export interface CategoryProductFormSchemaResponse {
+  categoryId: string;
+  categoryName: string;
+  template: SpecificationFieldDefinition[];
+}
+
 export interface CategoryEntity {
   id: string;
   name: string;
@@ -5,6 +20,7 @@ export interface CategoryEntity {
   description: string | null;
   image: string | null;
   parentId: string | null;
+  specificationTemplate?: SpecificationFieldDefinition[] | unknown;
   isFeatured: boolean;
   isActive: boolean;
   sortOrder: number;
@@ -41,6 +57,7 @@ export interface CreateCategoryDto {
   description?: string;
   image?: string;
   parentId?: string | null;
+  specificationTemplate?: SpecificationFieldDefinition[];
   isFeatured?: boolean;
   isActive?: boolean;
   sortOrder?: number;
@@ -52,6 +69,7 @@ export interface UpdateCategoryDto {
   description?: string | null;
   image?: string | null;
   parentId?: string | null;
+  specificationTemplate?: SpecificationFieldDefinition[];
   isFeatured?: boolean;
   isActive?: boolean;
   sortOrder?: number;
@@ -68,6 +86,10 @@ export interface ICategoriesRepository {
   findAll(includeInactive?: boolean): Promise<CategoryEntity[]>;
   create(data: CreateCategoryDto & { slug: string }): Promise<CategoryEntity>;
   update(id: string, data: UpdateCategoryDto): Promise<CategoryEntity>;
+  updateSpecificationTemplate(
+    id: string,
+    template: SpecificationFieldDefinition[],
+  ): Promise<CategoryEntity>;
   softDelete(id: string): Promise<CategoryEntity>;
   reorder(items: ReorderCategoryItem[]): Promise<void>;
   countChildren(parentId: string): Promise<number>;

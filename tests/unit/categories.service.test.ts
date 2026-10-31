@@ -52,6 +52,7 @@ describe('CategoriesService (Unit Tests with Mocked Repository)', () => {
       reassignChildren: vi.fn().mockResolvedValue(0),
       getAncestors: vi.fn().mockResolvedValue([]),
       getDescendantIds: vi.fn().mockResolvedValue([]),
+      updateSpecificationTemplate: vi.fn(),
     };
 
     mockAuditSvc = {
@@ -282,4 +283,67 @@ describe('CategoriesService (Unit Tests with Mocked Repository)', () => {
       expect(result.children[0]?.name).toBe('Shirts');
     });
   });
+
+  describe('Specification Template & Inheritance', () => {
+    it('should merge ancestor templates in root-to-child order and allow child overrides', async () => {
+      const parentCat = {
+        ...sampleCategory,
+        id: 'cat-parent',
+        name: 'Apparel',
+        specificationTemplate: [
+          { key: 'fabric', label: 'Fabric', type: 'select', required: true, options: ['Cotton', 'Linen'], sortOrder: 1 },
+          { key: 'care', label: 'General Care', type: 'text', required: false, options: [], sortOrder: 2 },
+        ],
+      };
+
+      const childCat = {
+        ...sampleCategory,
+        id: 'cat-child',
+        name: 'Shirts',
+        parentId: 'cat-parent',
+        specificationTemplate: [
+          // Override 'fabric' with specialized options, and add 'collar'
+          { key: 'fabric', label: 'Specialized Fabric', type: 'select', required: true, options: ['Egyptian Cotton', 'Oxford Cotton'], sortOrder: 1 },
+          { key: 'collar', label: 'Collar Type', type: 'select', required: true, options: ['Spread', 'Mandarin'], sortOrder: 3 },
+        ],
+      };
+
+      vi.spyOn(mockRepo, 'findById').mockResolvedValue(childCat as never);
+      vi.spyOn(mockRepo, 'getAncestors').mockResolvedValue([parentCat as never, childCat as never]);
+
+      const schema = await service.getProductFormSchema('cat-child');
+
+      expect(schema.categoryId).toBe('cat-child');
+      expect(schema.template).toHaveLength(3); // fabric, care, collar
+      const fabricField = schema.template.find(f => f.key === 'fabric');
+      expect(fabricField?.label).toBe('Specialized Fabric');
+      expect(fabricField?.options).toContain('Egyptian Cotton');
+      expect(schema.template.some(f => f.key === 'collar')).toBe(true);
+      expect(schema.template.some(f => f.key === 'care')).toBe(true);
+    });
+
+    it('should update specification template and record audit log', async () => {
+      const template = [
+        { key: 'colour', label: 'Colour', type: 'text' as const, required: true, sortOrder: 1 },
+      ];
+
+      vi.spyOn(mockRepo, 'findById').mockResolvedValue(sampleCategory);
+      vi.spyOn(mockRepo, 'updateSpecificationTemplate').mockResolvedValue({
+        ...sampleCategory,
+        specificationTemplate: template,
+      } as never);
+
+      const result = await service.updateSpecificationTemplate('cat-1', template, mockAdminActor);
+
+      expect(mockRepo.updateSpecificationTemplate).toHaveBeenCalledWith('cat-1', template);
+      expect(mockAuditSvc.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'CATEGORY_SPEC_TEMPLATE_UPDATED',
+          targetId: 'cat-1',
+        }),
+      );
+      expect(result.specificationTemplate).toEqual(template);
+    });
+  });
 });
+

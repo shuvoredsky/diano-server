@@ -6,6 +6,7 @@ import type {
   ICategoriesRepository,
   ReorderCategoryItem,
   UpdateCategoryDto,
+  SpecificationFieldDefinition,
 } from './categories.types';
 
 export class PrismaCategoriesRepository implements ICategoriesRepository {
@@ -68,6 +69,9 @@ export class PrismaCategoriesRepository implements ICategoriesRepository {
         isFeatured: data.isFeatured ?? false,
         isActive: data.isActive ?? true,
         sortOrder: data.sortOrder ?? 0,
+        ...(data.specificationTemplate !== undefined
+          ? { specificationTemplate: data.specificationTemplate as unknown as Prisma.InputJsonValue }
+          : {}),
       },
     }) as unknown as Promise<CategoryEntity>;
   }
@@ -84,6 +88,21 @@ export class PrismaCategoriesRepository implements ICategoriesRepository {
         ...(data.isFeatured !== undefined ? { isFeatured: data.isFeatured } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+        ...(data.specificationTemplate !== undefined
+          ? { specificationTemplate: data.specificationTemplate as unknown as Prisma.InputJsonValue }
+          : {}),
+      },
+    }) as unknown as Promise<CategoryEntity>;
+  }
+
+  async updateSpecificationTemplate(
+    id: string,
+    template: SpecificationFieldDefinition[],
+  ): Promise<CategoryEntity> {
+    return prisma.category.update({
+      where: { id },
+      data: {
+        specificationTemplate: template as unknown as Prisma.InputJsonValue,
       },
     }) as unknown as Promise<CategoryEntity>;
   }

@@ -8,6 +8,8 @@ import type {
   ICategoriesRepository,
   ReorderCategoryItem,
   UpdateCategoryDto,
+  CategoryProductFormSchemaResponse,
+  SpecificationFieldDefinition,
 } from './categories.types';
 import { categoriesRepository as defaultCategoriesRepo } from './categories.repository';
 import type { IAuditService } from '@/services/audit.service';
@@ -429,6 +431,78 @@ export class CategoriesService {
       throw AppError.notFound('Category not found');
     }
     return category;
+  }
+
+  /**
+   * Admin: Get category product form schema including inherited specification template from ancestors
+   */
+  async getProductFormSchema(categoryId: string): Promise<CategoryProductFormSchemaResponse> {
+    const category = await this.repo.findById(categoryId);
+    if (!category) {
+      throw AppError.notFound('Category not found');
+    }
+
+    // getAncestors returns [root, ..., directParent, category]
+    const ancestors = await this.repo.getAncestors(categoryId);
+    const hierarchy = ancestors.some(a => a.id === category.id)
+      ? ancestors
+      : [...ancestors, category];
+
+    const mergedTemplateMap = new Map<string, SpecificationFieldDefinition>();
+
+    for (const cat of hierarchy) {
+      const template = Array.isArray(cat.specificationTemplate)
+        ? (cat.specificationTemplate as SpecificationFieldDefinition[])
+        : [];
+
+      for (const field of template) {
+        // Child category definitions override ancestor definitions with the same key
+        mergedTemplateMap.set(field.key.toLowerCase(), field);
+      }
+    }
+
+    const mergedTemplate = Array.from(mergedTemplateMap.values()).sort(
+      (a, b) => a.sortOrder - b.sortOrder,
+    );
+
+    return {
+      categoryId: category.id,
+      categoryName: category.name,
+      template: mergedTemplate,
+    };
+  }
+
+  /**
+   * Admin: Update specification template definition for a category
+   */
+  async updateSpecificationTemplate(
+    categoryId: string,
+    template: SpecificationFieldDefinition[],
+    actor?: AccessTokenPayload,
+  ): Promise<CategoryEntity> {
+    const category = await this.repo.findById(categoryId);
+    if (!category) {
+      throw AppError.notFound('Category not found');
+    }
+
+    const updated = await this.repo.updateSpecificationTemplate(categoryId, template);
+
+    await this.auditSvc.record({
+      actorType: actor ? 'USER' : 'SYSTEM',
+      actorId: actor?.userId ?? 'system',
+      action: 'CATEGORY_SPEC_TEMPLATE_UPDATED',
+      targetType: 'CATEGORY',
+      targetId: categoryId,
+      metadata: {
+        actorEmail: actor?.email,
+        previousCount: Array.isArray(category.specificationTemplate)
+          ? (category.specificationTemplate as unknown[]).length
+          : 0,
+        newCount: template.length,
+      },
+    });
+
+    return updated;
   }
 }
 

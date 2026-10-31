@@ -51,6 +51,20 @@ categoriesRouter.patch(
   categoriesController.updateImage,
 );
 
+categoriesRouter.get(
+  '/:id/product-form-schema',
+  authenticate,
+  requirePermission('category:read'),
+  categoriesController.getProductFormSchema,
+);
+
+categoriesRouter.patch(
+  '/:id/specification-template',
+  authenticate,
+  requirePermission('category:update'),
+  categoriesController.updateSpecificationTemplate,
+);
+
 categoriesRouter.post(
   '/:id/image',
   authenticate,

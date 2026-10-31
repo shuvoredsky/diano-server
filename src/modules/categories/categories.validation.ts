@@ -57,9 +57,29 @@ export const deleteCategoryQuerySchema = z.object({
   reassignToId: z.string().trim().optional(),
 });
 
+export const specificationFieldSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1, 'Field key is required')
+    .max(50)
+    .regex(/^[a-z0-9_-]+$/i, 'Key must be alphanumeric with hyphens or underscores'),
+  label: z.string().trim().min(1, 'Field label is required').max(100),
+  type: z.enum(['text', 'select', 'number']),
+  required: z.boolean().default(false),
+  options: z.array(z.string().trim().min(1).max(100)).optional().default([]),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const updateSpecificationTemplateSchema = z.object({
+  template: z.array(specificationFieldSchema),
+});
+
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type UpdateCategoryStatusInput = z.infer<typeof updateCategoryStatusSchema>;
 export type ReorderCategoriesInput = z.infer<typeof reorderCategoriesSchema>;
 export type UpdateCategoryImageInput = z.infer<typeof updateCategoryImageSchema>;
 export type DeleteCategoryQueryInput = z.infer<typeof deleteCategoryQuerySchema>;
+export type SpecificationFieldInput = z.infer<typeof specificationFieldSchema>;
+export type UpdateSpecificationTemplateInput = z.infer<typeof updateSpecificationTemplateSchema>;
