@@ -13,8 +13,9 @@ const envSchema = z.object({
   APP_NAME: z.string().default('diano-server'),
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001,http://localhost:5173'),
 
-  // DB and Redis are optional in test/dev until explicitly connected
+  // Database and Redis URLs
   DATABASE_URL: z.string().optional().default('postgresql://diano:diano_dev_password@localhost:5432/diano_dev?schema=public'),
+  TEST_DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().optional().default('redis://localhost:6379'),
   REDIS_HOST: z.string().optional().default('localhost'),
   REDIS_PORT: z.coerce.number().optional().default(6379),
@@ -36,6 +37,11 @@ const envSchema = z.object({
   COOKIE_SECRET: z
     .string()
     .min(32, 'COOKIE_SECRET must be at least 32 characters long'),
+
+  // Password & Security Parameters
+  BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(16).default(12),
+  MAX_LOGIN_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  LOCKOUT_DURATION_MINUTES: z.coerce.number().int().positive().default(15),
 
   // Rate Limiter
   RATE_LIMIT_WINDOW_MS: z.coerce.number().positive().default(900000),

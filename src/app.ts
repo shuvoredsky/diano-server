@@ -10,6 +10,7 @@ import { baseRateLimiter } from '@/middlewares/rate-limiter.middleware';
 import { notFoundMiddleware } from '@/middlewares/not-found.middleware';
 import { errorMiddleware } from '@/middlewares/error.middleware';
 import { rootRouter } from '@/routes';
+import { setupSwagger } from '@/docs/swagger';
 
 const app = express();
 
@@ -55,6 +56,9 @@ app.use(baseRateLimiter);
 
 // API Version 1 Routes
 app.use(env.API_PREFIX, rootRouter);
+
+// Swagger API Documentation (non-production only)
+setupSwagger(app);
 
 // 404 Route Handler
 app.use(notFoundMiddleware);
