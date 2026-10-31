@@ -212,6 +212,30 @@ ALTER TABLE "StockAuditItem"
 4. **Order / Cart Single Price Contract:**
    - Cart and Order modules never accept client-side pricing. They resolve `variant.price` directly from the database and verify against active campaign rules at execution time.
 
+### C. Transaction-Safe Stock Ledger Rules & Lifecycle
+1. **Stock Metric Definitions:**
+   - **`onHand`**: Physical inventory units physically situated in the warehouse facility.
+   - **`reserved`**: Inventory units committed to active checkout funnels or confirmed, unfulfilled customer orders.
+   - **`damaged`**: Quarantined defective, broken, or expired units removed from the sellable pool.
+   - **`availableStock` = `onHand - reserved - damaged`**: The only metric exposed for checkout and purchase authorization. Must never drop below zero.
+
+2. **Order & Checkout Lifecycle Matrix:**
+   | Channel / Method | Trigger Event | Service Method | Stock Mutation |
+   |:---|:---|:---|:---|
+   | **COD (Cash on Delivery)** | Order Placement | `reserveStock` | `reserved += qty`, `availableStock -= qty` |
+   | **COD** | Order Confirmed & Dispatched | `commitReservation` | `reserved -= qty`, `onHand -= qty` |
+   | **COD** | Order Cancelled (Pre-shipment) | `releaseReservation` | `reserved -= qty`, `availableStock += qty` |
+   | **COD** | Order Returned (Post-delivery) | `restock` | `onHand += qty`, `availableStock += qty` |
+   | **Online Payment Gateway** | Checkout Initiated | `reserveStock` (with TTL) | `reserved += qty`, `availableStock -= qty` |
+   | **Online Payment Gateway** | IPN Payment Verified | `commitReservation` | `reserved -= qty`, `onHand -= qty` |
+   | **Online Payment Gateway** | Payment Failed / Abandoned | `releaseReservation` | `reserved -= qty`, `availableStock += qty` |
+   | **Automated Housekeeping** | Checkout TTL Exceeded | `releaseExpiredReservations` | Batch releases active expired reservations |
+
+3. **Concurrency & Deadlock Prevention:**
+   - **Conditional Atomic UPDATEs:** All stock deductions evaluate `WHERE ("onHand" - "reserved" - "damaged") >= $qty` and check `affectedRows === 1`. Read-then-write race conditions are mathematically impossible.
+   - **Deterministic Lock Acquisition:** Multi-warehouse transfers (`transferStock`) sort warehouse IDs alphabetically before obtaining row locks (`[sourceId, targetId].sort()`), preventing circular deadlock graphs under concurrent bi-directional transfers.
+   - **Idempotency:** Operations check `[referenceType, referenceId, action]` before applying mutations. Network retries and duplicate webhooks return the existing state gracefully without double-mutating balances.
+
 ---
 
 ## 5. Deletion & Data Retention Policies
