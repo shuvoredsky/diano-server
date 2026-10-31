@@ -36,6 +36,7 @@ export const permissionsData = [
   { resource: 'product', action: 'update', name: 'Update Products', slug: 'product:update', description: 'Modify products and pricing' },
   { resource: 'product', action: 'delete', name: 'Delete Products', slug: 'product:delete', description: 'Soft-delete products' },
   { resource: 'product', action: 'publish', name: 'Publish Products', slug: 'product:publish', description: 'Publish or archive products' },
+  { resource: 'product', action: 'view_cost', name: 'View Product Cost Price', slug: 'product:view_cost', description: 'View supplier cost prices for product variants' },
 
   { resource: 'category', action: 'read', name: 'Read Categories', slug: 'category:read', description: 'View product categories' },
   { resource: 'category', action: 'create', name: 'Create Categories', slug: 'category:create', description: 'Create categories' },

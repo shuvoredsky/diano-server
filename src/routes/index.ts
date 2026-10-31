@@ -6,6 +6,7 @@ import { rolesRouter } from '@/modules/roles/roles.routes';
 import { permissionsRouter } from '@/modules/permissions/permissions.routes';
 import { customersRouter } from '@/modules/customers/customers.routes';
 import { categoriesRouter } from '@/modules/categories/categories.routes';
+import { productsRouter } from '@/modules/products/products.routes';
 
 const rootRouter = Router();
 
@@ -27,6 +28,9 @@ rootRouter.use('/customers', customersRouter);
 
 // Categories (Catalog)
 rootRouter.use('/categories', categoriesRouter);
+
+// Products & Variants (Catalog)
+rootRouter.use('/products', productsRouter);
 
 export { rootRouter };
 

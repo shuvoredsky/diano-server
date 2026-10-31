@@ -137,6 +137,12 @@ ALTER TABLE "Order"
 
 ALTER TABLE "Payment"
   ADD CONSTRAINT "chk_payment_amount_positive" CHECK ("amount" > 0);
+
+-- 5. Full-Text & Trigram Fuzzy Search (pg_trgm extension for catalog ILIKE search acceleration)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX IF NOT EXISTS "idx_product_name_trgm" ON "Product" USING gin ("name" gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS "idx_product_description_trgm" ON "Product" USING gin ("description" gin_trgm_ops);
 ```
 
 ---

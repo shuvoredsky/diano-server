@@ -1,0 +1,86 @@
+import { Router } from 'express';
+import { productsController } from './products.controller';
+import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
+
+export const productsRouter = Router();
+
+// ================= Public Endpoints =================
+// Note: /featured and /admin/* must be declared before /:slug to avoid route collision
+productsRouter.get('/', productsController.getPublicProducts);
+productsRouter.get('/featured', productsController.getPublicFeatured);
+
+// ================= Admin Endpoints =================
+productsRouter.get(
+  '/admin/all',
+  authenticate,
+  requirePermission('product:read'),
+  productsController.getAdminProducts,
+);
+
+productsRouter.get(
+  '/admin/:id',
+  authenticate,
+  requirePermission('product:read'),
+  productsController.getAdminProductById,
+);
+
+productsRouter.post(
+  '/',
+  authenticate,
+  requirePermission('product:create'),
+  productsController.createProduct,
+);
+
+productsRouter.patch(
+  '/:id',
+  authenticate,
+  requirePermission('product:update'),
+  productsController.updateProduct,
+);
+
+productsRouter.delete(
+  '/:id',
+  authenticate,
+  requirePermission('product:delete'),
+  productsController.deleteProduct,
+);
+
+productsRouter.patch(
+  '/:id/status',
+  authenticate,
+  requirePermission('product:publish'),
+  productsController.updateStatus,
+);
+
+productsRouter.patch(
+  '/:id/featured',
+  authenticate,
+  requirePermission('product:update'),
+  productsController.toggleFeatured,
+);
+
+// Variant Management
+productsRouter.post(
+  '/:id/variants',
+  authenticate,
+  requirePermission('product:create'),
+  productsController.addVariant,
+);
+
+productsRouter.patch(
+  '/:id/variants/:variantId',
+  authenticate,
+  requirePermission('product:update'),
+  productsController.updateVariant,
+);
+
+productsRouter.delete(
+  '/:id/variants/:variantId',
+  authenticate,
+  requirePermission('product:delete'),
+  productsController.deleteVariant,
+);
+
+// Public Slug endpoints (placed after specific static segments)
+productsRouter.get('/:slug', productsController.getPublicBySlug);
+productsRouter.get('/:slug/related', productsController.getPublicRelated);
