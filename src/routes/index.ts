@@ -4,6 +4,7 @@ import { authRouter } from '@/modules/auth/auth.routes';
 import { usersRouter } from '@/modules/users/users.routes';
 import { rolesRouter } from '@/modules/roles/roles.routes';
 import { permissionsRouter } from '@/modules/permissions/permissions.routes';
+import { customersRouter } from '@/modules/customers/customers.routes';
 
 const rootRouter = Router();
 
@@ -20,6 +21,10 @@ rootRouter.use('/users', usersRouter);
 rootRouter.use('/roles', rolesRouter);
 rootRouter.use('/permissions', permissionsRouter);
 
+// Customers (Self-Service & Admin)
+rootRouter.use('/customers', customersRouter);
+
 export { rootRouter };
+
 
 
