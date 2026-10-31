@@ -60,13 +60,6 @@ export const swaggerDocument = {
           roles: { type: 'array', items: { type: 'string' } },
         },
       },
-      AuthResponseData: {
-        type: 'object',
-        properties: {
-          user: { $ref: '#/components/schemas/UserResponse' },
-          accessToken: { type: 'string' },
-        },
-      },
       RegisterInput: {
         type: 'object',
         required: ['email', 'name', 'password'],
@@ -89,70 +82,90 @@ export const swaggerDocument = {
           password: { type: 'string' },
         },
       },
-      ForgotPasswordInput: {
+      CreateAdminUserInput: {
         type: 'object',
-        required: ['email'],
+        required: ['email', 'name', 'roleSlug'],
         properties: {
           email: { type: 'string', format: 'email' },
+          name: { type: 'string', minLength: 2 },
+          phone: { type: 'string', example: '+8801712345678' },
+          roleSlug: { type: 'string', example: 'manager' },
+          password: { type: 'string', format: 'password', nullable: true },
         },
       },
-      ResetPasswordInput: {
-        type: 'object',
-        required: ['token', 'newPassword'],
-        properties: {
-          token: { type: 'string' },
-          newPassword: { type: 'string', format: 'password' },
-        },
-      },
-      VerifyEmailInput: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: { type: 'string' },
-        },
-      },
-      SendOtpInput: {
-        type: 'object',
-        required: ['identifier', 'purpose'],
-        properties: {
-          identifier: { type: 'string', example: 'user@example.com' },
-          purpose: {
-            type: 'string',
-            enum: ['LOGIN', 'REGISTRATION', 'PASSWORD_RESET', 'CHECKOUT'],
-          },
-        },
-      },
-      VerifyOtpInput: {
-        type: 'object',
-        required: ['identifier', 'code', 'purpose'],
-        properties: {
-          identifier: { type: 'string' },
-          code: { type: 'string', example: '123456' },
-          purpose: {
-            type: 'string',
-            enum: ['LOGIN', 'REGISTRATION', 'PASSWORD_RESET', 'CHECKOUT'],
-          },
-        },
-      },
-      ChangePasswordInput: {
-        type: 'object',
-        required: ['currentPassword', 'newPassword'],
-        properties: {
-          currentPassword: { type: 'string' },
-          newPassword: { type: 'string', format: 'password' },
-        },
-      },
-      UpdateProfileInput: {
+      UpdateUserInput: {
         type: 'object',
         properties: {
           name: { type: 'string' },
           phone: { type: 'string' },
-          avatarUrl: { type: 'string', format: 'uri' },
+          roleSlug: { type: 'string' },
+        },
+      },
+      CreateRoleInput: {
+        type: 'object',
+        required: ['name', 'slug'],
+        properties: {
+          name: { type: 'string' },
+          slug: { type: 'string' },
+          description: { type: 'string', nullable: true },
+          permissionSlugs: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      AssignPermissionsInput: {
+        type: 'object',
+        required: ['permissionSlugs'],
+        properties: {
+          permissionSlugs: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      CustomerAddressInput: {
+        type: 'object',
+        required: ['fullName', 'phone', 'addressLine', 'district', 'city'],
+        properties: {
+          type: { type: 'string', enum: ['SHIPPING', 'BILLING'], default: 'SHIPPING' },
+          isDefault: { type: 'boolean', default: false },
+          fullName: { type: 'string' },
+          phone: { type: 'string', example: '+8801712345678' },
+          alternativePhone: { type: 'string', nullable: true },
+          addressLine: { type: 'string' },
+          district: { type: 'string' },
+          city: { type: 'string' },
+          area: { type: 'string', nullable: true },
+          postalCode: { type: 'string', nullable: true },
+          landmark: { type: 'string', nullable: true },
+        },
+      },
+      CustomerConsentsInput: {
+        type: 'object',
+        required: ['consents'],
+        properties: {
+          consents: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['channel', 'purpose', 'isGranted'],
+              properties: {
+                channel: { type: 'string', enum: ['SMS', 'EMAIL', 'WHATSAPP'] },
+                purpose: { type: 'string', enum: ['MARKETING', 'RECOVERY', 'ANALYTICS'] },
+                isGranted: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      CustomerNoteInput: {
+        type: 'object',
+        required: ['note'],
+        properties: {
+          note: { type: 'string' },
         },
       },
     },
   },
   paths: {
+    // -------------------------------------------------------------------------
+    // AUTHENTICATION
+    // -------------------------------------------------------------------------
     '/api/v1/auth/register': {
       post: {
         tags: ['Authentication'],
@@ -161,198 +174,354 @@ export const swaggerDocument = {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterInput' } } },
         },
-        responses: {
-          201: {
-            description: 'Account registered successfully',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' } } },
-          },
-          400: { description: 'Validation error' },
-          409: { description: 'Email or phone already in use' },
-        },
+        responses: { 201: { description: 'Account registered' }, 409: { description: 'Email/phone taken' } },
       },
     },
     '/api/v1/auth/login': {
       post: {
         tags: ['Authentication'],
-        summary: 'Authenticate customer or staff with credentials',
+        summary: 'Customer portal login (administrative accounts rejected)',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginInput' } } },
         },
-        responses: {
-          200: {
-            description: 'Authenticated successfully',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' } } },
-          },
-          401: { description: 'Invalid credentials' },
-          423: { description: 'Account locked due to consecutive failed attempts' },
-        },
+        responses: { 200: { description: 'Authenticated' }, 401: { description: 'Invalid credentials' }, 403: { description: 'Admin account rejected' } },
       },
     },
     '/api/v1/auth/admin/login': {
       post: {
         tags: ['Authentication'],
-        summary: 'Dedicated admin portal login (requires staff / administrative role)',
+        summary: 'Dedicated admin portal login',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginInput' } } },
         },
-        responses: {
-          200: {
-            description: 'Administrator authenticated successfully',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' } } },
-          },
-          401: { description: 'Invalid credentials or not an administrative account' },
-        },
+        responses: { 200: { description: 'Authenticated' }, 403: { description: 'Customer account rejected' } },
       },
     },
     '/api/v1/auth/refresh': {
       post: {
         tags: ['Authentication'],
-        summary: 'Rotate refresh token and issue a fresh access token',
-        responses: {
-          200: { description: 'Tokens rotated successfully' },
-          401: { description: 'Invalid or reused refresh token' },
-        },
+        summary: 'Rotate refresh token and issue new access token',
+        responses: { 200: { description: 'Refreshed' }, 401: { description: 'Invalid or reused' } },
       },
     },
     '/api/v1/auth/logout': {
       post: {
         tags: ['Authentication'],
-        summary: 'Revoke active refresh token and invalidate current session',
-        responses: {
-          200: { description: 'Logged out successfully' },
-        },
+        summary: 'Revoke active refresh token and current session',
+        responses: { 200: { description: 'Logged out' } },
       },
     },
     '/api/v1/auth/logout-all': {
       post: {
         tags: ['Authentication'],
-        summary: 'Revoke all sessions and refresh tokens across all devices',
+        summary: 'Revoke all sessions across all devices',
         security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'All sessions terminated' },
-          401: { description: 'Unauthorized' },
-        },
-      },
-    },
-    '/api/v1/auth/forgot-password': {
-      post: {
-        tags: ['Authentication'],
-        summary: 'Request password reset email (enumeration safe)',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ForgotPasswordInput' } } },
-        },
-        responses: {
-          200: { description: 'Generic dispatch response' },
-        },
-      },
-    },
-    '/api/v1/auth/reset-password': {
-      post: {
-        tags: ['Authentication'],
-        summary: 'Reset account password using single-use verification token',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ResetPasswordInput' } } },
-        },
-        responses: {
-          200: { description: 'Password reset successfully' },
-          400: { description: 'Invalid or expired reset token' },
-        },
-      },
-    },
-    '/api/v1/auth/verify-email': {
-      post: {
-        tags: ['Authentication'],
-        summary: 'Verify customer email address',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/VerifyEmailInput' } } },
-        },
-        responses: {
-          200: { description: 'Email verified' },
-          400: { description: 'Invalid or expired token' },
-        },
-      },
-    },
-    '/api/v1/auth/otp/send': {
-      post: {
-        tags: ['Authentication'],
-        summary: 'Send 6-digit numeric OTP',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/SendOtpInput' } } },
-        },
-        responses: {
-          200: { description: 'OTP dispatched' },
-        },
-      },
-    },
-    '/api/v1/auth/otp/verify': {
-      post: {
-        tags: ['Authentication'],
-        summary: 'Verify 6-digit numeric OTP',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/VerifyOtpInput' } } },
-        },
-        responses: {
-          200: { description: 'OTP verified successfully' },
-          400: { description: 'Invalid or expired OTP' },
-        },
-      },
-    },
-    '/api/v1/auth/change-password': {
-      post: {
-        tags: ['Authentication'],
-        summary: 'Change current account password',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ChangePasswordInput' } } },
-        },
-        responses: {
-          200: { description: 'Password changed successfully' },
-          400: { description: 'Current password incorrect' },
-          401: { description: 'Unauthorized' },
-        },
+        responses: { 200: { description: 'All sessions terminated' } },
       },
     },
     '/api/v1/auth/me': {
       get: {
         tags: ['Authentication'],
-        summary: 'Get current user profile and roles',
+        summary: 'Get current user identity',
         security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Current profile retrieved' },
-          401: { description: 'Unauthorized' },
-        },
+        responses: { 200: { description: 'Profile retrieved' } },
       },
-      patch: {
-        tags: ['Authentication'],
-        summary: 'Update current user profile information',
+    },
+
+    // -------------------------------------------------------------------------
+    // USERS (ADMIN MANAGEMENT)
+    // -------------------------------------------------------------------------
+    '/api/v1/users': {
+      get: {
+        tags: ['Users Management'],
+        summary: 'List users with pagination, search, role, and status filtering',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'role', in: 'query', schema: { type: 'string' } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Paginated user list' } },
+      },
+      post: {
+        tags: ['Users Management'],
+        summary: 'Create administrative account with role hierarchy escalation checks',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/UpdateProfileInput' } } },
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateAdminUserInput' } } },
         },
-        responses: {
-          200: { description: 'Profile updated' },
-          401: { description: 'Unauthorized' },
-        },
+        responses: { 201: { description: 'User created' }, 403: { description: 'Privilege escalation denied' } },
       },
     },
-    '/api/v1/auth/login-history': {
+    '/api/v1/users/{id}': {
       get: {
-        tags: ['Authentication'],
-        summary: 'Retrieve recent login attempts and devices for the current user',
+        tags: ['Users Management'],
+        summary: 'Get user details by ID',
         security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Login history list retrieved' },
-          401: { description: 'Unauthorized' },
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'User retrieved' }, 404: { description: 'Not found' } },
+      },
+      patch: {
+        tags: ['Users Management'],
+        summary: 'Update user profile or role (escalation protected, revokes sessions on role change)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/UpdateUserInput' } } },
         },
+        responses: { 200: { description: 'User updated' }, 403: { description: 'Escalation or last super-admin violation' } },
+      },
+      delete: {
+        tags: ['Users Management'],
+        summary: 'Soft-delete user (self-delete blocked, last super-admin blocked, revokes sessions)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'User deactivated' }, 400: { description: 'Self-deletion' }, 403: { description: 'Last super-admin' } },
+      },
+    },
+    '/api/v1/users/{id}/status': {
+      patch: {
+        tags: ['Users Management'],
+        summary: 'Update user status (ACTIVE / SUSPENDED; self-suspend blocked, revokes sessions)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string', enum: ['ACTIVE', 'SUSPENDED'] } } } } },
+        },
+        responses: { 200: { description: 'Status updated' } },
+      },
+    },
+    '/api/v1/users/{id}/revoke-sessions': {
+      post: {
+        tags: ['Users Management'],
+        summary: 'Terminate all active sessions of a specified user',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Sessions revoked' } },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // ROLES & PERMISSIONS
+    // -------------------------------------------------------------------------
+    '/api/v1/roles': {
+      get: {
+        tags: ['Roles & Permissions'],
+        summary: 'List all system and custom RBAC roles',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Roles list' } },
+      },
+      post: {
+        tags: ['Roles & Permissions'],
+        summary: 'Create custom role with permission escalation validation',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateRoleInput' } } },
+        },
+        responses: { 201: { description: 'Role created' }, 403: { description: 'Escalation denied' } },
+      },
+    },
+    '/api/v1/roles/{id}': {
+      get: {
+        tags: ['Roles & Permissions'],
+        summary: 'Get role details and its permissions',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Role details' } },
+      },
+      patch: {
+        tags: ['Roles & Permissions'],
+        summary: 'Update custom role (system roles immutable)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Role updated' }, 403: { description: 'System role immutable' } },
+      },
+      delete: {
+        tags: ['Roles & Permissions'],
+        summary: 'Delete custom role (system roles cannot be deleted; assigned roles blocked)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Role deleted' }, 400: { description: 'Users assigned' }, 403: { description: 'System role' } },
+      },
+    },
+    '/api/v1/roles/{id}/permissions': {
+      put: {
+        tags: ['Roles & Permissions'],
+        summary: 'Assign permissions to role (invalidates server cache, escalation blocked)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/AssignPermissionsInput' } } },
+        },
+        responses: { 200: { description: 'Permissions assigned' }, 403: { description: 'Escalation denied' } },
+      },
+    },
+    '/api/v1/permissions': {
+      get: {
+        tags: ['Roles & Permissions'],
+        summary: 'Read-only grouped permissions list',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Grouped permissions' } },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // CUSTOMERS (SELF-SERVICE)
+    // -------------------------------------------------------------------------
+    '/api/v1/customers/me/profile': {
+      get: {
+        tags: ['Customer Self-Service'],
+        summary: 'Get authenticated customer profile',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Profile retrieved' } },
+      },
+      patch: {
+        tags: ['Customer Self-Service'],
+        summary: 'Update authenticated customer profile',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Profile updated' } },
+      },
+    },
+    '/api/v1/customers/me/addresses': {
+      get: {
+        tags: ['Customer Self-Service'],
+        summary: 'List customer saved addresses',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Address list' } },
+      },
+      post: {
+        tags: ['Customer Self-Service'],
+        summary: 'Add address (max 10 limit, default address switching)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CustomerAddressInput' } } },
+        },
+        responses: { 201: { description: 'Address created' }, 400: { description: 'Limit exceeded' } },
+      },
+    },
+    '/api/v1/customers/me/addresses/{addressId}': {
+      patch: {
+        tags: ['Customer Self-Service'],
+        summary: 'Update address (ownership verified)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'addressId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Address updated' }, 403: { description: 'Not owner' } },
+      },
+      delete: {
+        tags: ['Customer Self-Service'],
+        summary: 'Delete address (ownership verified)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'addressId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Address deleted' }, 403: { description: 'Not owner' } },
+      },
+    },
+    '/api/v1/customers/me/consents': {
+      get: {
+        tags: ['Customer Self-Service'],
+        summary: 'Get marketing & recovery consent preferences',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Consents retrieved' } },
+      },
+      patch: {
+        tags: ['Customer Self-Service'],
+        summary: 'Update consent preferences (writes audit history)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CustomerConsentsInput' } } },
+        },
+        responses: { 200: { description: 'Consents updated' } },
+      },
+    },
+    '/api/v1/customers/me/data-export': {
+      get: {
+        tags: ['Customer Self-Service'],
+        summary: 'Export personal data JSON (profile, addresses, consents, logins)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Data export object' } },
+      },
+    },
+    '/api/v1/customers/me/delete-account': {
+      post: {
+        tags: ['Customer Self-Service'],
+        summary: 'Request account deletion (soft-deletes, anonymizes PII, revokes sessions)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Account deleted and personal data anonymized' } },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // CUSTOMERS (ADMIN MANAGEMENT)
+    // -------------------------------------------------------------------------
+    '/api/v1/customers': {
+      get: {
+        tags: ['Customer Admin Management'],
+        summary: 'List customers with search and pagination',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Paginated customers' } },
+      },
+    },
+    '/api/v1/customers/{id}': {
+      get: {
+        tags: ['Customer Admin Management'],
+        summary: 'Get customer detail with addresses, consents, and order summary',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Customer details' } },
+      },
+    },
+    '/api/v1/customers/{id}/status': {
+      patch: {
+        tags: ['Customer Admin Management'],
+        summary: 'Update customer status (ACTIVE / SUSPENDED; revokes sessions on suspension)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Status updated' } },
+      },
+    },
+    '/api/v1/customers/{id}/notes': {
+      get: {
+        tags: ['Customer Admin Management'],
+        summary: 'Get administrative notes for customer',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Notes list' } },
+      },
+      post: {
+        tags: ['Customer Admin Management'],
+        summary: 'Add administrative note to customer',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CustomerNoteInput' } } },
+        },
+        responses: { 201: { description: 'Note added' } },
+      },
+    },
+    '/api/v1/customers/{id}/timeline': {
+      get: {
+        tags: ['Customer Admin Management'],
+        summary: 'Aggregated activity timeline (logins, notes, status changes)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Timeline list' } },
       },
     },
   },

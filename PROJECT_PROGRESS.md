@@ -16,77 +16,120 @@
 | **M1: Project Setup & Core Foundation** | Base project, strict TypeScript, ESLint flat config, Prettier, Pino logger with redaction, Zod env validation, AppError, ApiResponse, Date & Currency utils, Health/Readiness endpoints, Vitest test suite | ✅ Completed | Fully functional without requiring local DB/Redis running |
 | **M2: Prisma Data Modeling** | Complete Prisma 7 schema (48 models, 19 enums), Decimal(12,2) money, cuid IDs, immutable order item snapshots, double-entry stock movement ledger, payment events, idempotency keys, safe idempotent seed script, docs/SCHEMA_SUMMARY.md | ✅ Completed | Schema validated & formatted; Client generated; Seed script ready |
 | **M2b: Database Migration & Seed** | Run migrations on live Neon database, apply SQL CHECK constraints, run idempotent seed | ⏸️ Deferred | Deferred by user request until DB connectivity is re-established |
-| **M3: Auth & Identity (No-DB Mode)** | JWT access tokens (15m), rotating opaque refresh tokens (SHA-256 hashed in DB), refresh token family reuse detection, account lockout, RBAC (`authorize`), permission middleware (`requirePermission`), anti-enumeration generic responses, single-use password reset, in-memory rate limiting, Swagger UI | ✅ Completed | 68 unit tests passed, 5 DB integration tests skipped (DB required) |
-| **M4: Catalog & Inventory** | Categories, products, variants, SKU, stock movement ledger | ⏳ Queued Next | Awaiting user instruction |
-| **M5: Cart & Checkout** | Cart sessions, abandoned cart tracking, atomic stock reservations | ⏳ Queued | Planned |
-| **M6: Orders & Payments** | Order state machine, payment events, idempotency keys, refunds | ⏳ Queued | Planned |
+| **M3: Auth & Identity (No-DB Mode)** | JWT access tokens (15m), rotating opaque refresh tokens (SHA-256 hashed in DB), refresh token family reuse detection, account lockout, RBAC (`authorize`), permission middleware (`requirePermission`), anti-enumeration generic responses, single-use password reset, in-memory rate limiting, unified role identifiers, Swagger UI | ✅ Completed | Verified and locked; bidirectional portal login separation enforced |
+| **M4: Users, Roles, Permissions & Customers** | Administrative user management, privilege escalation guards, role hierarchy levels, system role protection, in-memory cache invalidation, customer self-service (profile, address book CRUD, consents, export, PII anonymization), admin customer management & timeline | ✅ Completed | 114 unit tests passed, 9 DB integration tests skipped (DB required) |
+| **M5: Catalog & Inventory** | Categories, products, variants, SKU, stock movement ledger | ⏳ Queued Next | Awaiting user instruction |
+| **M6: Cart & Checkout** | Cart sessions, abandoned cart tracking, atomic stock reservations | ⏳ Queued | Planned |
+| **M7: Orders & Payments** | Order state machine, payment events, idempotency keys, refunds | ⏳ Queued | Planned |
 
 ---
 
-## M3 Authentication & Authorization Specification (No-DB Mode)
+## M4 Implementation Specification (No-DB Mode)
 
 ### 1. Endpoints Implemented
 
-| Method | Endpoint | Protection / Middlewares | Description |
-|:---|:---|:---|:---|
-| `POST` | `/api/v1/auth/register` | `authRateLimiter` | Register customer account with email/phone & Zod password policy |
-| `POST` | `/api/v1/auth/login` | `authRateLimiter` | Universal credential authentication (resets failed count, checks lockout) |
-| `POST` | `/api/v1/auth/admin/login` | `authRateLimiter` | Dedicated admin portal login (requires administrative/staff role) |
-| `POST` | `/api/v1/auth/refresh` | `refreshRateLimiter`, `verifyCookieOrigin` | Rotate refresh token; detects token reuse and revokes entire family |
-| `POST` | `/api/v1/auth/logout` | `optionalAuthenticate` | Revoke active refresh token family and invalidate session |
-| `POST` | `/api/v1/auth/logout-all` | `authenticate` | Terminate all active sessions across all devices for current user |
-| `POST` | `/api/v1/auth/forgot-password` | `authRateLimiter` | Request password reset link (anti-enumeration generic response) |
-| `POST` | `/api/v1/auth/reset-password` | `authRateLimiter` | Reset password using single-use token; terminates all active sessions |
-| `POST` | `/api/v1/auth/verify-email` | None | Verify customer email address with single-use token |
-| `POST` | `/api/v1/auth/otp/send` | `authRateLimiter` | Send 6-digit numeric OTP |
-| `POST` | `/api/v1/auth/otp/verify` | `authRateLimiter` | Verify 6-digit numeric OTP with attempt limits (3 max) |
-| `POST` | `/api/v1/auth/change-password` | `authenticate` | Change account password; revokes all existing sessions |
-| `GET` | `/api/v1/auth/me` | `authenticate` | Retrieve current user profile and role slugs |
-| `PATCH` | `/api/v1/auth/me` | `authenticate` | Update current user profile (name, phone, avatarUrl) |
-| `GET` | `/api/v1/auth/login-history` | `authenticate` | Retrieve recent login history (status, IP, userAgent, timestamp) |
-| `GET` | `/api/docs` | Non-production | Interactive Swagger / OpenAPI 3.0 API documentation |
+#### A. Users Management (`/api/v1/users`)
+- `GET /api/v1/users`: List users with pagination, search (name, email, phone), role, and status filtering (`user:read`).
+- `GET /api/v1/users/:id`: Get user details by ID (`user:read`).
+- `POST /api/v1/users`: Create administrative account with role hierarchy escalation checks (`user:create`).
+- `PATCH /api/v1/users/:id`: Update user profile and role; revokes all active sessions upon role transition (`user:update`).
+- `PATCH /api/v1/users/:id/status`: Update status (`ACTIVE` / `SUSPENDED`); self-suspension blocked; revokes sessions on suspension (`user:manage`).
+- `DELETE /api/v1/users/:id`: Soft-delete user; self-deletion blocked; last active Super Admin blocked; revokes sessions (`user:delete`).
+- `POST /api/v1/users/:id/revoke-sessions`: Terminate all active sessions of a specified user (`user:manage`).
 
-### 2. Security Decisions & Implementation
-- **Password Security:** Salt rounds configurable via `BCRYPT_ROUNDS` (default 12). Rehash-on-login detects outdated hashes and upgrades them dynamically upon successful login.
-- **Token Security:** Short-lived access token (15m) containing `{ userId, sessionId, roles, email }`. Refresh tokens are random opaque strings stored **only as SHA-256 hashes** in the database.
-- **Refresh Token Rotation & Reuse Detection:** New refresh token issued on every refresh; old token marked `usedAt`. If an already used token is submitted, the entire token family (`familyId`) is immediately revoked, all sessions killed, and an audit alert logged.
-- **Cookie Security:** Refresh token delivered via `HttpOnly`, `SameSite: 'lax'`, `path: '/api/v1/auth'`, and `Secure: true` in production. Protected against CSRF via `verifyCookieOrigin` middleware.
-- **Account Lockout & Anti-Enumeration:** Account locked for `LOCKOUT_DURATION_MINUTES` after `MAX_LOGIN_ATTEMPTS` consecutive failed attempts. Generic error messages prevent user enumeration.
-- **RBAC & Permissions:** Role check via `authorize(...roles)`. Granular permission check via `requirePermission('resource:action')` backed by `PermissionsCache` (5-minute TTL). `super-admin` unconditionally bypasses checks.
-- **Audit Logging:** Admin logins, password resets, logout-all, and token reuse attacks are logged to `AuditLog` with sanitized metadata (secrets, passwords, and tokens stripped).
-- **Email Service Adapter:** Console / Dev adapter active (`ConsoleEmailService`), redacting tokens in production logs.
+#### B. Roles & Permissions Management (`/api/v1/roles`, `/api/v1/permissions`)
+- `GET /api/v1/roles`: List all system and custom roles (`role:read`).
+- `GET /api/v1/roles/:id`: Get role details with granular permissions (`role:read`).
+- `POST /api/v1/roles`: Create custom role with permission escalation verification (`role:create`).
+- `PATCH /api/v1/roles/:id`: Update custom role; system roles cannot be renamed or altered (`role:update`).
+- `DELETE /api/v1/roles/:id`: Delete custom role; system roles cannot be deleted; roles with active user assignments blocked (`role:delete`).
+- `PUT /api/v1/roles/:id/permissions`: Assign permissions to role; invalidates `PermissionsCache`; escalation guards enforced (`role:update`).
+- `GET /api/v1/permissions`: Read-only grouped list of all permissions by resource (`role:read`).
+
+#### C. Customer Self-Service (`/api/v1/customers/me`)
+- `GET /api/v1/customers/me/profile`: Retrieve customer profile and summary statistics.
+- `PATCH /api/v1/customers/me/profile`: Update name, phone, avatarUrl, gender, and dateOfBirth.
+- `GET /api/v1/customers/me/addresses`: List customer addresses.
+- `POST /api/v1/customers/me/addresses`: Add new address (enforces 10 address limit, automatic default address switching).
+- `PATCH /api/v1/customers/me/addresses/:addressId`: Update address (enforces customer ownership protection).
+- `DELETE /api/v1/customers/me/addresses/:addressId`: Delete address (enforces customer ownership protection).
+- `GET /api/v1/customers/me/consents`: Retrieve latest marketing & recovery consent preferences.
+- `PATCH /api/v1/customers/me/consents`: Update consent preferences with audit trail in `ConsentRecord`.
+- `GET /api/v1/customers/me/data-export`: Download comprehensive personal data JSON export.
+- `POST /api/v1/customers/me/delete-account`: Request account deletion (soft-deletes, anonymizes PII, revokes all sessions).
+
+#### D. Customer Admin Management (`/api/v1/customers`)
+- `GET /api/v1/customers`: Paginated customer directory with search and status filtering (`customer:read`).
+- `GET /api/v1/customers/:id`: Customer detail with addresses, consents, and initial order summary (`customer:read`).
+- `PATCH /api/v1/customers/:id/status`: Update status (`ACTIVE` / `SUSPENDED`); revokes sessions on suspension (`customer:manage`).
+- `POST /api/v1/customers/:id/notes`: Add administrative note to customer profile (`customer:manage`).
+- `GET /api/v1/customers/:id/notes`: Retrieve customer notes history (`customer:read`).
+- `GET /api/v1/customers/:id/timeline`: Aggregated activity timeline from logins, notes, and status changes (`customer:read`).
+
+---
+
+### 2. Security Rules & Guard Rails Implemented
+
+1. **Role Hierarchy & Privilege Escalation:**
+   - Unified role constants in `src/constants/roles.ts` establish strict tiers (`SUPER_ADMIN: 100`, `ADMIN: 80`, `MANAGER: 60`, `ORDER_MANAGER / INVENTORY_MANAGER: 40`, `SUPPORT_STAFF: 20`, `CUSTOMER: 0`).
+   - Actors cannot assign, elevate, or delete roles at or above their tier (unless Super Admin).
+   - Actors cannot grant permissions they do not possess.
+2. **Last Active Super Admin Protection:**
+   - The system queries `countActiveSuperAdmins()` before any delete, suspend, or demote action on a Super Admin.
+   - If only 1 remains, the operation is blocked to prevent administrative lockout.
+3. **Super Admin Modification Guard:**
+   - Only a Super Administrator can modify, update, or delete another Super Administrator account.
+4. **Self-Suspension & Self-Deletion Block:**
+   - An actor cannot delete or suspend their own account (`actor.userId === targetUserId`).
+5. **System Role Protection:**
+   - Seeded system roles (`super-admin`, `admin`, `manager`, `order-manager`, `inventory-manager`, `support-staff`, `customer`) have `isSystem: true`.
+   - Any attempt to delete or rename system roles throws `403 Forbidden`.
+6. **Session Invalidation on Security Transitions:**
+   - When user status is updated to `SUSPENDED`, or when a user's role is modified, or when an account is deleted, all active sessions and refresh tokens for that user are immediately revoked.
+7. **Address Book Limits & Ownership Check:**
+   - Maximum 10 addresses per customer.
+   - Ownership is strictly validated (`address.userId === req.user.userId`).
+   - Automatic default address switching: Setting an address as default clears existing defaults of that type.
+8. **PII Anonymization Policy:**
+   - Account deletion anonymizes customer PII (email converted to `anonymized_<id>@deleted.diano.internal`, phone set to null, name to `Anonymized Customer`), while preserving database referential integrity for past transactions.
+9. **Cache Invalidation:**
+   - In-memory `PermissionsCache` is automatically invalidated whenever role permissions are reassigned or custom roles are deleted.
+10. **Audit Logging:**
+    - Every administrative operation (user creation, updates, status changes, soft-deletions, role creation, permission updates, customer notes, status updates) logs an entry to `AuditLog`.
 
 ---
 
 ## DB Verification Pending (To be executed once Neon / Database is active)
 
-The following items have been fully written and architected according to Prisma schemas and interfaces, but have **not yet been executed against a live database instance**:
+The following items are implemented according to Prisma models and interfaces, but have **not yet been executed against a live database instance**:
 
-1. **Database Migrations:**
-   - Execute `npx prisma migrate dev --name init` on Neon database.
-   - Verify raw SQL CHECK constraints (`onHand >= 0`, `reserved >= 0`, `damaged >= 0`, `reserved <= onHand`, `rating >= 1 AND rating <= 5`, `riskScore >= 0 AND riskScore <= 100`, non-negative financial decimals, positive quantities).
-2. **Database Seeding:**
-   - Run `npm run db:seed` to verify creation of 7 standard roles (`super-admin`, `admin`, `manager`, `order-manager`, `inventory-manager`, `support-staff`, `customer`), system permissions, super-admin account, primary warehouse, and shipping zones.
-3. **Integration Tests Execution:**
-   - Run `npm test -- tests/integration/auth.integration.test.ts` against a dedicated test database (`TEST_DATABASE_URL`).
-   - Validate live HTTP cookie setting, session row creation, refresh token rotation row updates, and cascaded revocation.
-4. **Database Indexes & Constraints:**
-   - Verify unique constraint on `User.email` and `User.phone`.
-   - Verify index lookups on `Session.tokenHash`, `RefreshToken.tokenHash`, and `RefreshToken.familyId`.
-   - Verify foreign key cascades when a user or session is deleted.
+1. **Database Migrations:** Running `npx prisma migrate dev --name init` and applying SQL CHECK constraints (`onHand >= 0`, `reserved <= onHand`, `rating 1..5`, etc.).
+2. **Database Seeding:** Running `npm run db:seed` to verify 7 system roles, permissions, warehouse, and shipping zones.
+3. **Integration Test Suites:**
+   - `tests/integration/auth.integration.test.ts` (5 tests)
+   - `tests/integration/users-roles-customers.integration.test.ts` (4 tests)
+4. **Constraints & Indexes:**
+   - Unique constraints on `User.email`, `User.phone`, `Role.name`, `Role.slug`.
+   - Foreign key cascade deletions on `UserRole`, `RolePermission`, `CustomerAddress`.
+   - Transactional isolation of `assignRole` and `setRolePermissions`.
 
 ---
 
 ## Test Verification Summary
-- **Unit Tests Passed:** 68 passed (100% of non-DB unit tests)
+- **Unit Tests Passed:** 114 passed (100% of non-DB unit tests)
   - `password.util.test.ts`: 3 passed
   - `token.util.test.ts`: 3 passed
   - `jwt.util.test.ts`: 5 passed
-  - `auth.service.test.ts`: 19 passed
+  - `auth.service.test.ts`: 20 passed
   - `auth.middleware.test.ts`: 14 passed
+  - `roles.constant.test.ts`: 4 passed
+  - `pagination.util.test.ts`: 5 passed
+  - `users.service.test.ts`: 13 passed
+  - `roles.service.test.ts`: 13 passed
+  - `customers.service.test.ts`: 10 passed
   - `currency.util.test.ts`: 8 passed
   - `date.util.test.ts`: 5 passed
   - `env.config.test.ts`: 3 passed
   - `api-response.test.ts`: 4 passed
   - `health.test.ts`: 4 passed
-- **Integration Tests Skipped:** 5 skipped (`tests/integration/auth.integration.test.ts` skipped via `describe.skipIf(!process.env.TEST_DATABASE_URL)`). **No skipped test was marked as passed.**
+- **Integration Tests Skipped:** 9 skipped (`tests/integration/auth.integration.test.ts` [5] + `tests/integration/users-roles-customers.integration.test.ts` [4]). **No skipped test was marked as passed.**
