@@ -5,6 +5,7 @@ import { usersRouter } from '@/modules/users/users.routes';
 import { rolesRouter } from '@/modules/roles/roles.routes';
 import { permissionsRouter } from '@/modules/permissions/permissions.routes';
 import { customersRouter } from '@/modules/customers/customers.routes';
+import { categoriesRouter } from '@/modules/categories/categories.routes';
 
 const rootRouter = Router();
 
@@ -23,6 +24,9 @@ rootRouter.use('/permissions', permissionsRouter);
 
 // Customers (Self-Service & Admin)
 rootRouter.use('/customers', customersRouter);
+
+// Categories (Catalog)
+rootRouter.use('/categories', categoriesRouter);
 
 export { rootRouter };
 
