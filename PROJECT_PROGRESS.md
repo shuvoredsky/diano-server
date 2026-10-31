@@ -133,3 +133,45 @@ The following items are implemented according to Prisma models and interfaces, b
   - `api-response.test.ts`: 4 passed
   - `health.test.ts`: 4 passed
 - **Integration Tests Skipped:** 9 skipped (`tests/integration/auth.integration.test.ts` [5] + `tests/integration/users-roles-customers.integration.test.ts` [4]). **No skipped test was marked as passed.**
+
+---
+
+## Milestone M5: Catalog, Categories, Products, Variants & Image Storage (Completed)
+- **Status:** Completed (No-DB Mode)
+- **Architecture:** Layered design across `src/modules/categories`, `src/modules/products`, and `src/services/storage.service.ts`.
+- **Key Modules & Implementations:**
+  1. **Categories Module (`src/modules/categories`):**
+     - Slug auto-generation with collision suffix avoidance.
+     - Parent-child cycle detection (blocks setting any descendant as parent).
+     - Maximum depth limit of 3 strictly enforced.
+     - Public category tree construction with active product counts.
+     - Parent-inactive cascade protection (inactive ancestors hide entire sub-tree from public views).
+     - Soft-delete with safe reassign options for active products and subcategories.
+  2. **Products & Variants Module (`src/modules/products`):**
+     - Atomic creation of product + multiple variants via transaction.
+     - SKU and Barcode uniqueness validation with clear descriptive errors.
+     - Status management (`DRAFT`, `ACTIVE`, `ARCHIVED`) and featured toggle.
+     - Variant soft-deletion with dependency protection (`hasStockOrOrders`).
+     - Price change auditing: any change to `price`, `compareAtPrice`, or `costPrice` is logged to `AuditLog`.
+     - **DTO Separation:** `PublicProductDto` strips `costPrice`, `status`, `deletedAt`, and `viewCount`. `costPrice` is only visible to operators with `product:view_cost` permission in `AdminProductDto`.
+     - Money fields formatted strictly as 2-decimal string (`"1250.00"`), never float.
+     - Public catalog search with bounded limits (max 100), ILIKE search, category inheritance expansion, and sort filters (`newest`, `price_asc`, `price_desc`, `name_asc`, `name_desc`, `popular`).
+  3. **Storage & Image Upload (`src/services/storage.service.ts` + `upload.middleware.ts`):**
+     - `IStorageAdapter` interface with `LocalDiskAdapter` (stores in gitignored `/uploads`) and `CloudinaryAdapter`.
+     - Multer memory storage with 5MB max file size and 10 files max batch limit.
+     - **Magic-Byte Signature Verification:** Buffers inspected for JPEG (`FF D8 FF`), PNG (`89 50 4E 47`), and WebP (`RIFF...WEBP`). SVGs and fake file extensions are strictly blocked to prevent XSS and code execution.
+     - Path traversal neutralized by cryptographically generating UUID filenames.
+     - Product and category gallery upload, primary image switching, alt text update, and reordering.
+- **Test Suite Results:**
+  - **155 Unit Tests Passed (0 failed)** across 19 test files.
+  - **13 Integration Tests SKIPPED (Database Verification Required)** across 3 test files (`tests/integration/auth.integration.test.ts` [5], `tests/integration/users-roles-customers.integration.test.ts` [4], `tests/integration/catalog.integration.test.ts` [4]).
+- **DB Verification Pending List (To be verified once Neon PostgreSQL is connected):**
+  1. Verify `Category` recursive CTE / parent-child queries against live PostgreSQL.
+  2. Verify `Product` + `ProductVariant` multi-row atomic transaction rollback on failure.
+  3. Verify unique constraints on `sku` and `barcode` in `ProductVariant` table.
+  4. Verify PostgreSQL CHECK constraints (`price >= 0`, `costPrice >= 0`).
+  5. Apply `pg_trgm` extension and create GIN trigram indexes (`idx_product_name_trgm`, `idx_product_description_trgm`) for accelerated search.
+  6. Verify soft-delete composite index performance (`[status, deletedAt]`, `[isActive, deletedAt]`).
+  7. Verify `AuditLog` persistence on price adjustments.
+  8. Run complete integration test suite with `TEST_DATABASE_URL` against live PostgreSQL.
+

@@ -524,6 +524,268 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Timeline list' } },
       },
     },
+
+    // ==========================================
+    // CATALOG: CATEGORIES
+    // ==========================================
+    '/api/v1/categories': {
+      get: {
+        tags: ['Catalog: Categories'],
+        summary: 'Get active category hierarchy tree with product counts (Public)',
+        responses: { 200: { description: 'Active category tree' } },
+      },
+      post: {
+        tags: ['Catalog: Categories'],
+        summary: 'Create category (Admin, max depth 3, cycle protected)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' },
+                  slug: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' },
+                  parentId: { type: 'string', nullable: true },
+                  isFeatured: { type: 'boolean' },
+                  isActive: { type: 'boolean' },
+                  sortOrder: { type: 'integer' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Category created' } },
+      },
+    },
+    '/api/v1/categories/{slug}': {
+      get: {
+        tags: ['Catalog: Categories'],
+        summary: 'Get category detail by slug with breadcrumbs and active children (Public)',
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Category detail' }, 404: { description: 'Not found' } },
+      },
+    },
+    '/api/v1/categories/{id}': {
+      patch: {
+        tags: ['Catalog: Categories'],
+        summary: 'Update category (Admin, cycle protected, max depth limit)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Category updated' } },
+      },
+      delete: {
+        tags: ['Catalog: Categories'],
+        summary: 'Soft-delete category with product/sub-category safety reassignment (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'reassignToId', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Category deleted' } },
+      },
+    },
+    '/api/v1/categories/{id}/status': {
+      patch: {
+        tags: ['Catalog: Categories'],
+        summary: 'Toggle category active status (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { type: 'object', properties: { isActive: { type: 'boolean' } } } } },
+        },
+        responses: { 200: { description: 'Status updated' } },
+      },
+    },
+    '/api/v1/categories/{id}/image': {
+      post: {
+        tags: ['Catalog: Categories'],
+        summary: 'Upload category image file (Admin, verified magic bytes)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: { 'multipart/form-data': { schema: { type: 'object', properties: { image: { type: 'string', format: 'binary' } } } } },
+        },
+        responses: { 200: { description: 'Image uploaded' } },
+      },
+      patch: {
+        tags: ['Catalog: Categories'],
+        summary: 'Set category image URL or remove (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: { 'application/json': { schema: { type: 'object', properties: { image: { type: 'string', nullable: true } } } } },
+        },
+        responses: { 200: { description: 'Image URL updated' } },
+      },
+    },
+    '/api/v1/categories/reorder': {
+      put: {
+        tags: ['Catalog: Categories'],
+        summary: 'Batch reorder category sort order (Admin)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Categories reordered' } },
+      },
+    },
+
+    // ==========================================
+    // CATALOG: PRODUCTS & VARIANTS
+    // ==========================================
+    '/api/v1/products': {
+      get: {
+        tags: ['Catalog: Products'],
+        summary: 'Get paginated catalog products with filters and search (Public)',
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'q', in: 'query', schema: { type: 'string' } },
+          { name: 'categoryId', in: 'query', schema: { type: 'string' } },
+          { name: 'minPrice', in: 'query', schema: { type: 'number' } },
+          { name: 'maxPrice', in: 'query', schema: { type: 'number' } },
+          { name: 'sortBy', in: 'query', schema: { type: 'string', enum: ['newest', 'price_asc', 'price_desc', 'name_asc', 'name_desc', 'popular'] } },
+        ],
+        responses: { 200: { description: 'Catalog products' } },
+      },
+      post: {
+        tags: ['Catalog: Products'],
+        summary: 'Create product + variants together in atomic transaction (Admin)',
+        security: [{ BearerAuth: [] }],
+        responses: { 201: { description: 'Product created' } },
+      },
+    },
+    '/api/v1/products/featured': {
+      get: {
+        tags: ['Catalog: Products'],
+        summary: 'Get featured products for homepage (Public)',
+        responses: { 200: { description: 'Featured products' } },
+      },
+    },
+    '/api/v1/products/{slug}': {
+      get: {
+        tags: ['Catalog: Products'],
+        summary: 'Get product detail by slug with variants and images (Public)',
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Product detail' }, 404: { description: 'Not found' } },
+      },
+    },
+    '/api/v1/products/{slug}/related': {
+      get: {
+        tags: ['Catalog: Products'],
+        summary: 'Get related products for product page (Public)',
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Related products' } },
+      },
+    },
+    '/api/v1/products/{id}': {
+      patch: {
+        tags: ['Catalog: Products'],
+        summary: 'Update product details (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Product updated' } },
+      },
+      delete: {
+        tags: ['Catalog: Products'],
+        summary: 'Soft-delete product (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Product deleted' } },
+      },
+    },
+    '/api/v1/products/{id}/status': {
+      patch: {
+        tags: ['Catalog: Products'],
+        summary: 'Transition product status: DRAFT / ACTIVE / ARCHIVED (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Status updated' } },
+      },
+    },
+    '/api/v1/products/{id}/featured': {
+      patch: {
+        tags: ['Catalog: Products'],
+        summary: 'Toggle product isFeatured flag (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Featured flag toggled' } },
+      },
+    },
+    '/api/v1/products/{id}/variants': {
+      post: {
+        tags: ['Catalog: Variants'],
+        summary: 'Add variant to product (Admin, unique SKU/barcode)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 201: { description: 'Variant added' } },
+      },
+    },
+    '/api/v1/products/{id}/variants/{variantId}': {
+      patch: {
+        tags: ['Catalog: Variants'],
+        summary: 'Update variant with price-change audit logging (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'variantId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Variant updated' } },
+      },
+      delete: {
+        tags: ['Catalog: Variants'],
+        summary: 'Soft-delete variant (Admin, blocked if active stock or order reference)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'variantId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Variant deleted' } },
+      },
+    },
+    '/api/v1/products/{id}/images': {
+      post: {
+        tags: ['Catalog: Images'],
+        summary: 'Upload gallery images to product (Admin, multipart, magic-byte checked)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 201: { description: 'Images uploaded' } },
+      },
+    },
+    '/api/v1/products/{id}/images/{imageId}': {
+      patch: {
+        tags: ['Catalog: Images'],
+        summary: 'Update image metadata (altText, isPrimary, sortOrder)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'imageId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Image updated' } },
+      },
+      delete: {
+        tags: ['Catalog: Images'],
+        summary: 'Delete image from database and underlying storage',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'imageId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Image deleted' } },
+      },
+    },
+    '/api/v1/products/{id}/images/reorder': {
+      put: {
+        tags: ['Catalog: Images'],
+        summary: 'Batch reorder gallery images for product',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Images reordered' } },
+      },
+    },
   },
 };
 
