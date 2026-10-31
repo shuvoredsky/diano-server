@@ -23,21 +23,7 @@ import type {
   ChangePasswordInput,
   UpdateProfileInput,
 } from './auth.validation';
-
-const ADMIN_ROLE_SLUGS = [
-  'super-admin',
-  'admin',
-  'manager',
-  'order-manager',
-  'inventory-manager',
-  'support-staff',
-  'SUPER_ADMIN',
-  'ADMIN',
-  'MANAGER',
-  'ORDER_MANAGER',
-  'INVENTORY_MANAGER',
-  'SUPPORT_STAFF',
-];
+import { ADMIN_ROLE_SLUGS } from '@/constants/roles';
 
 export class AuthService {
   constructor(
@@ -170,10 +156,12 @@ export class AuthService {
       throw genericAuthError;
     }
 
-    // If requireAdminRole, verify user possesses an admin role
+    // Strict Portal Separation:
+    // Administrative accounts must use /auth/admin/login; Customer accounts must use /auth/login
     const roles = this.extractRoleSlugs(user);
+    const hasAdminRole = roles.some(role => ADMIN_ROLE_SLUGS.includes(role.toLowerCase()));
+
     if (requireAdminRole) {
-      const hasAdminRole = roles.some(role => ADMIN_ROLE_SLUGS.includes(role));
       if (!hasAdminRole) {
         await this.repo.createLoginHistory({
           userId: user.id,
@@ -195,6 +183,20 @@ export class AuthService {
         ipAddress: meta.ip,
         userAgent: meta.userAgent,
       });
+    } else {
+      if (hasAdminRole) {
+        await this.repo.createLoginHistory({
+          userId: user.id,
+          email: user.email,
+          status: 'FAILED',
+          reason: 'Admin attempted login on customer endpoint',
+          ip: meta.ip,
+          userAgent: meta.userAgent,
+        });
+        throw AppError.forbidden(
+          'Administrative accounts must authenticate via the administrative portal at /api/v1/auth/admin/login',
+        );
+      }
     }
 
     // Reset failed login counter on success

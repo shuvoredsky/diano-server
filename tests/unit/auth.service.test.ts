@@ -285,6 +285,21 @@ describe('AuthService (Unit Tests with Mocked Repository)', () => {
         authService.login({ email: customerUser.email, password }, mockMeta, true),
       ).rejects.toThrowError('Access denied. Administrator privileges required.');
     });
+
+    it('should reject administrative accounts on public customer login endpoint', async () => {
+      const password = 'Password123!';
+      const hash = await hashPassword(password);
+      const adminUser = createMockUser({
+        passwordHash: hash,
+        roles: [{ role: { id: 'r1', name: 'Super Admin', slug: 'super-admin', type: 'SYSTEM' } }],
+      });
+
+      mockRepo.findUserByEmail.mockResolvedValue(adminUser);
+
+      await expect(
+        authService.login({ email: adminUser.email, password }, mockMeta, false),
+      ).rejects.toThrowError(/Administrative accounts must authenticate via the administrative portal/);
+    });
   });
 
   describe('Refresh Token Rotation & Reuse Detection', () => {

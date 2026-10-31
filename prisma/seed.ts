@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
+import { SYSTEM_ROLES } from '../src/constants/roles';
 
 dotenv.config();
 
@@ -92,15 +93,7 @@ export const permissionsData = [
   { resource: 'settings', action: 'update', name: 'Update Settings', slug: 'settings:update', description: 'Modify global store settings' },
 ];
 
-export const rolesData: Array<{ name: string; slug: string; type: RoleType; description: string }> = [
-  { name: 'Super Administrator', slug: 'super-admin', type: RoleType.SUPER_ADMIN, description: 'Full root access to all store operations' },
-  { name: 'Store Administrator', slug: 'admin', type: RoleType.ADMIN, description: 'Store manager with comprehensive operational permissions' },
-  { name: 'General Manager', slug: 'manager', type: RoleType.MANAGER, description: 'Operational oversight and reporting access' },
-  { name: 'Order Manager', slug: 'order-manager', type: RoleType.ORDER_MANAGER, description: 'Manages orders, shipments, returns, and customer service' },
-  { name: 'Inventory Manager', slug: 'inventory-manager', type: RoleType.INVENTORY_MANAGER, description: 'Manages products, warehouses, suppliers, and stock' },
-  { name: 'Support Staff', slug: 'support-staff', type: RoleType.SUPPORT_STAFF, description: 'Customer support, order status reading, and review moderation' },
-  { name: 'Customer', slug: 'customer', type: RoleType.CUSTOMER, description: 'Standard consumer account' },
-];
+export const rolesData = SYSTEM_ROLES;
 
 export async function seedDatabase() {
   if (process.env.NODE_ENV === 'production') {
