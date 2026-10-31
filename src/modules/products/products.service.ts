@@ -24,6 +24,13 @@ import { calculatePricing } from './products.pricing';
 import { productsRepository as defaultProductsRepo } from './products.repository';
 import type { ICategoriesRepository } from '@/modules/categories/categories.types';
 import { categoriesRepository as defaultCategoriesRepo } from '@/modules/categories/categories.repository';
+import {
+  categoriesService as defaultCategoriesService,
+  type CategoriesService,
+} from '@/modules/categories/categories.service';
+import { validateProductSpecifications } from '@/modules/categories/categories.specifications';
+import { sanitizeDescription, validateAndNormalizeVideoUrl } from '@/utils/sanitize.util';
+import { env } from '@/config/env.config';
 import type { IAuditService } from '@/services/audit.service';
 import { auditService as defaultAuditService } from '@/services/audit.service';
 import type { AccessTokenPayload } from '@/utils/jwt.util';
@@ -39,6 +46,7 @@ export class ProductsService {
     private readonly categoriesRepo: ICategoriesRepository = defaultCategoriesRepo,
     private readonly auditSvc: IAuditService = defaultAuditService,
     private readonly storageSvc: StorageService = defaultStorageService,
+    private readonly categoriesSvc: CategoriesService = defaultCategoriesService,
   ) {}
 
   private slugify(text: string): string {
@@ -226,8 +234,53 @@ export class ProductsService {
   ): Promise<AdminProductDto> {
     // 1. Verify category exists and is not deleted
     const category = await this.categoriesRepo.findById(dto.categoryId);
-    if (!category) {
+    if (!category || category.deletedAt) {
       throw AppError.notFound('Category not found');
+    }
+
+    // 1b. Validate subcategory if provided (must be child of specified category)
+    let leafCategoryId = dto.categoryId;
+    if (dto.subcategoryId) {
+      const subcat = await this.categoriesRepo.findById(dto.subcategoryId);
+      if (!subcat || subcat.deletedAt || !subcat.isActive) {
+        throw AppError.badRequest('Subcategory not found or is inactive');
+      }
+      if (subcat.parentId !== dto.categoryId) {
+        throw AppError.badRequest('Subcategory must be a child of the specified category');
+      }
+      leafCategoryId = dto.subcategoryId;
+    }
+
+    // 1c. Validate specifications against category/subcategory template
+    if (dto.specifications && Object.keys(dto.specifications).length > 0) {
+      const schema = await this.categoriesSvc.getProductFormSchema(leafCategoryId);
+      validateProductSpecifications(dto.specifications, schema.template);
+    }
+
+    // 1d. Sanitize rich-text description
+    if (dto.description) {
+      dto.description = sanitizeDescription(dto.description);
+    }
+
+    // 1e. Validate and normalize video URL
+    if (dto.videoUrl) {
+      dto.videoUrl = validateAndNormalizeVideoUrl(dto.videoUrl);
+    }
+
+    // 1f. Validate pricing calculations if MRP provided
+    if (dto.mrp) {
+      calculatePricing({
+        mrp: dto.mrp,
+        discountType: dto.discountType,
+        discountValue: dto.discountValue,
+      });
+    }
+
+    // 1g. Handle SEO field object
+    if (dto.seo) {
+      dto.metaTitle = dto.seo.metaTitle ?? dto.metaTitle;
+      dto.metaDescription = dto.seo.metaDescription ?? dto.metaDescription;
+      dto.metaKeywords = dto.seo.metaKeywords ?? dto.metaKeywords;
     }
 
     // 2. Validate SKU and Barcode uniqueness across initial variants
@@ -258,6 +311,7 @@ export class ProductsService {
     // 4. Create in repository
     const product = await this.repo.create({
       ...dto,
+      categoryId: leafCategoryId,
       slug,
     });
 
@@ -299,15 +353,63 @@ export class ProductsService {
       slug = await this.generateUniqueSlug(dto.name, id);
     }
 
+    const parentCatId = dto.categoryId || existing.categoryId;
+    let leafCategoryId = parentCatId;
+
     if (dto.categoryId && dto.categoryId !== existing.categoryId) {
       const category = await this.categoriesRepo.findById(dto.categoryId);
-      if (!category) {
+      if (!category || category.deletedAt) {
         throw AppError.notFound('Target category not found');
       }
     }
 
+    if (dto.subcategoryId) {
+      const subcat = await this.categoriesRepo.findById(dto.subcategoryId);
+      if (!subcat || subcat.deletedAt || !subcat.isActive) {
+        throw AppError.badRequest('Subcategory not found or is inactive');
+      }
+      if (subcat.parentId !== parentCatId) {
+        throw AppError.badRequest('Subcategory must be a child of the specified category');
+      }
+      leafCategoryId = dto.subcategoryId;
+    }
+
+    // Validate specifications if updated
+    if (dto.specifications && Object.keys(dto.specifications).length > 0) {
+      const schema = await this.categoriesSvc.getProductFormSchema(leafCategoryId);
+      validateProductSpecifications(dto.specifications, schema.template);
+    }
+
+    if (dto.description) {
+      dto.description = sanitizeDescription(dto.description);
+    }
+
+    if (dto.videoUrl) {
+      dto.videoUrl = validateAndNormalizeVideoUrl(dto.videoUrl);
+    }
+
+    if (dto.mrp !== undefined) {
+      calculatePricing({
+        mrp: dto.mrp ?? existing.mrp ?? 1,
+        discountType: dto.discountType ?? (existing.discountType as DiscountType) ?? 'NONE',
+        discountValue:
+          dto.discountValue !== undefined && dto.discountValue !== null
+            ? Number(dto.discountValue)
+            : existing.discountValue
+              ? Number(existing.discountValue)
+              : 0,
+      });
+    }
+
+    if (dto.seo) {
+      dto.metaTitle = dto.seo.metaTitle ?? dto.metaTitle;
+      dto.metaDescription = dto.seo.metaDescription ?? dto.metaDescription;
+      dto.metaKeywords = dto.seo.metaKeywords ?? dto.metaKeywords;
+    }
+
     const updated = await this.repo.update(id, {
       ...dto,
+      categoryId: leafCategoryId,
       slug,
     });
 
@@ -323,6 +425,47 @@ export class ProductsService {
     }
 
     return this.formatAdminProduct(updated, true);
+  }
+
+  /**
+   * Admin: Get all options, categories, and limits required to render the admin product form
+   */
+  async getAdminFormOptions(): Promise<Record<string, unknown>> {
+    const categories = await this.categoriesSvc.getPublicCategoriesTree();
+
+    return {
+      categories,
+      inventoryTypes: [
+        { value: 'READY_STOCK', label: 'Ready Stock' },
+        { value: 'PRE_ORDER', label: 'Pre-Order' },
+        { value: 'MADE_TO_ORDER', label: 'Made to Order' },
+      ],
+      discountTypes: [
+        { value: 'NONE', label: 'No Discount' },
+        { value: 'PERCENTAGE', label: 'Percentage (%)' },
+        { value: 'FIXED', label: 'Fixed Amount (BDT)' },
+      ],
+      uploadLimits: {
+        maxImageSizeMb: env.MAX_IMAGE_SIZE_MB,
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+        galleryMax: 4,
+        slots: ['THUMBNAIL', 'BACKVIEW', 'GALLERY'],
+      },
+      requiredFields: {
+        draft: ['name', 'categoryId', 'description', 'variants'],
+        active: [
+          'name',
+          'categoryId',
+          'description',
+          'variants (with SKU and price > 0)',
+          'thumbnail image',
+          'valid price greater than 0',
+        ],
+      },
+      videoHostAllowlist: ['youtube.com', 'youtu.be', 'vimeo.com'],
+      specificationTemplateEndpointHint: '/api/v1/categories/:id/product-form-schema',
+    };
   }
 
   /**

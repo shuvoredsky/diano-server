@@ -18,9 +18,51 @@
 | **M2b: Database Migration & Seed** | Run migrations on live Neon database, apply SQL CHECK constraints, run idempotent seed | ⏸️ Deferred | Deferred by user request until DB connectivity is re-established |
 | **M3: Auth & Identity (No-DB Mode)** | JWT access tokens (15m), rotating opaque refresh tokens (SHA-256 hashed in DB), refresh token family reuse detection, account lockout, RBAC (`authorize`), permission middleware (`requirePermission`), anti-enumeration generic responses, single-use password reset, in-memory rate limiting, unified role identifiers, Swagger UI | ✅ Completed | Verified and locked; bidirectional portal login separation enforced |
 | **M4: Users, Roles, Permissions & Customers** | Administrative user management, privilege escalation guards, role hierarchy levels, system role protection, in-memory cache invalidation, customer self-service (profile, address book CRUD, consents, export, PII anonymization), admin customer management & timeline | ✅ Completed | 114 unit tests passed, 9 DB integration tests skipped (DB required) |
-| **M5: Catalog & Inventory** | Categories, products, variants, SKU, stock movement ledger | ⏳ Queued Next | Awaiting user instruction |
-| **M6: Cart & Checkout** | Cart sessions, abandoned cart tracking, atomic stock reservations | ⏳ Queued | Planned |
+| **M5: Catalog & Inventory** | Categories, products, variants, SKU, image storage | ✅ Completed | Fully tested in No-DB mode |
+| **M5b: Professional Product Creation + Cloudinary** | Slot-based image uploads, Cloudinary integration, pricing engine, specification templates, rich-text sanitization, admin form options, strict validation | ✅ Completed | Fully tested in No-DB mode |
+| **M6: Cart & Checkout** | Cart sessions, abandoned cart tracking, atomic stock reservations | ⏳ Queued Next | Awaiting user instruction |
 | **M7: Orders & Payments** | Order state machine, payment events, idempotency keys, refunds | ⏳ Queued | Planned |
+
+---
+
+## Milestone M5b: Professional Product Creation + Cloudinary (Completed)
+- **Status:** Completed (No-DB Mode)
+- **Key Modules & Implementations:**
+  1. **Route Ordering & View Count Deduplication:**
+     - Parameter routes (`/:id`, `/:slug`) strictly ordered after static segments (`/admin/all`, `/admin/form-options`, `/featured`, `/reorder`).
+     - Public product view count increment protected by `viewDeduplicator` (IP + productId SHA-256 hash in 15-minute sliding window with periodic memory cleanup).
+  2. **Schema Extensions:**
+     - Enums: `ProductImageSlot` (`THUMBNAIL`, `BACKVIEW`, `GALLERY`), `InventoryType` (`READY_STOCK`, `PRE_ORDER`, `MADE_TO_ORDER`), `DiscountType` (`NONE`, `PERCENTAGE`, `FIXED`).
+     - `Category.specificationTemplate` (JSON definitions for dynamic fields).
+     - `Product` extended with `videoUrl`, `freeShipping`, `inventoryType`, `specifications`, `discountType`, `discountValue`, `specialOffer`, `mrp`.
+     - `ProductImage` extended with `slot`, `publicId`, `width`, `height`, `format`, `bytes`.
+  3. **Pure Pricing Calculation Engine (`src/modules/products/products.pricing.ts`):**
+     - Pure function `calculatePricing({ mrp, discountType, discountValue })` using `Decimal.js` and half-up 2-decimal rounding.
+     - Enforces `mrp > 0`, `0 < PERCENTAGE < 100`, `0 < FIXED < mrp`, `sellingPrice > 0`.
+     - Strictly ignores client-submitted `sellingPrice`. Non-blocking warning if `sellingPrice < costPrice`.
+  4. **Dynamic Specification Templates & Sanitization:**
+     - Inherited template resolution (`GET /api/v1/categories/:id/product-form-schema`) walking category hierarchy.
+     - `sanitize-html` strict allowlist (`p, br, strong, em, u, ul, ol, li, a, h2-h4, blockquote`) blocking scripts, SVGs, buttons, and `javascript:` URIs.
+     - Video URL normalization for YouTube (`watch` and `youtu.be` to `embed`) and Vimeo (to `player.vimeo.com`), blocking non-HTTPS and unauthorized hosts.
+  5. **Cloudinary Slot-Based Storage:**
+     - Server-side signed uploads with metadata and EXIF stripping (`image_metadata: false`, `flags: 'strip_profile'`).
+     - Slot endpoints: `POST /products/:id/images/thumbnail` (replaces old), `POST /products/:id/images/backview` (replaces old), `POST /products/:id/images/gallery` (max 4).
+     - Deletion: DB row deleted first; Cloudinary destroy attempted. Failures emit structured log `{ event: 'pendingStorageCleanup' }` without blocking admin operations.
+     - Responsive image preset helper `getResponsiveImageUrls` (200w, 400w, 900w, 1600w with `f_auto, q_auto`).
+     - Publishing rule: Transitioning to `ACTIVE` status strictly requires a thumbnail image, active category, active variant with SKU, and valid price > 0.
+     - Diagnostic script `npm run storage:check` (`scripts/storage-check.ts`).
+  6. **Admin Form Support & Strict Zod Validation:**
+     - `GET /api/v1/products/admin/form-options`: Returns category tree, inventoryTypes, discountTypes, upload limits, required fields for DRAFT vs ACTIVE, video allowlist, and hint.
+     - `createProductSchema` and `updateProductSchema` enforce `.strict()` (unknown keys rejected).
+     - Subcategory validation (must be active child of categoryId).
+     - Specification validation against category/subcategory template.
+     - DTO security: `PublicProductDto` strips `costPrice` and internal metrics; `AdminProductDto` includes pricing breakdown and restricts `costPrice` to operators with `product:view_cost`.
+- **DB Verification Pending List (To be verified once Neon PostgreSQL is connected):**
+  1. Partial unique index for single thumbnail per product (`idx_product_single_thumbnail`).
+  2. Partial unique index for single backview per product (`idx_product_single_backview`).
+  3. Database constraint checks for non-negative money and quantity values.
+  4. Seed verification with default fashion apparel specification template.
+  5. Live integration testing with `TEST_DATABASE_URL`.
 
 ---
 

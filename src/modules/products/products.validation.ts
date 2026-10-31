@@ -17,6 +17,7 @@ export const variantInputSchema = z
     attributes: z.record(z.string(), z.unknown()).optional().default({}),
     isActive: z.boolean().optional().default(true),
   })
+  .strict()
   .refine(
     data => {
       if (data.compareAtPrice !== undefined && data.compareAtPrice !== null) {
@@ -47,6 +48,7 @@ export const updateVariantSchema = z
     attributes: z.record(z.string(), z.unknown()).optional(),
     isActive: z.boolean().optional(),
   })
+  .strict()
   .refine(
     data => {
       if (
@@ -64,48 +66,89 @@ export const updateVariantSchema = z
     },
   );
 
-export const createProductSchema = z.object({
-  name: z.string().trim().min(2, 'Product name must be at least 2 characters').max(200),
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be alphanumeric with hyphens')
-    .max(220)
-    .optional(),
-  description: z.string().trim().min(10, 'Description must be at least 10 characters'),
-  shortDescription: z.string().trim().max(500).nullable().optional(),
-  categoryId: z.string().trim().min(1, 'Category ID is required'),
-  status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional().default('DRAFT'),
-  isFeatured: z.boolean().optional().default(false),
-  metaTitle: z.string().trim().max(100).nullable().optional(),
-  metaDescription: z.string().trim().max(300).nullable().optional(),
-  metaKeywords: z.string().trim().max(200).nullable().optional(),
-  tags: z.array(z.string().trim().min(1)).optional().default([]),
-  relatedProductIds: z.array(z.string().trim()).optional().default([]),
-  variants: z.array(variantInputSchema).min(1, 'At least one product variant is required'),
-});
+export const createProductSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Product name must be at least 2 characters').max(200),
+    slug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be alphanumeric with hyphens')
+      .max(220)
+      .optional(),
+    description: z.string().trim().min(10, 'Description must be at least 10 characters'),
+    shortDescription: z.string().trim().max(500).nullable().optional(),
+    categoryId: z.string().trim().min(1, 'Category ID is required'),
+    subcategoryId: z.string().trim().nullable().optional(),
+    videoUrl: z.string().trim().nullable().optional(),
+    mrp: z.coerce.number().positive('MRP must be positive').nullable().optional(),
+    discountType: z.enum(['NONE', 'PERCENTAGE', 'FIXED']).optional().default('NONE'),
+    discountValue: z.coerce.number().min(0, 'Discount value cannot be negative').nullable().optional(),
+    freeShipping: z.boolean().optional().default(false),
+    specialOffer: z.boolean().optional().default(false),
+    inventoryType: z
+      .enum(['READY_STOCK', 'PRE_ORDER', 'MADE_TO_ORDER'])
+      .optional()
+      .default('READY_STOCK'),
+    specifications: z.record(z.string(), z.unknown()).optional().default({}),
+    seo: z
+      .object({
+        metaTitle: z.string().trim().max(100).nullable().optional(),
+        metaDescription: z.string().trim().max(300).nullable().optional(),
+        metaKeywords: z.string().trim().max(200).nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional().default('DRAFT'),
+    isFeatured: z.boolean().optional().default(false),
+    metaTitle: z.string().trim().max(100).nullable().optional(),
+    metaDescription: z.string().trim().max(300).nullable().optional(),
+    metaKeywords: z.string().trim().max(200).nullable().optional(),
+    tags: z.array(z.string().trim().min(1)).optional().default([]),
+    relatedProductIds: z.array(z.string().trim()).optional().default([]),
+    variants: z.array(variantInputSchema).min(1, 'At least one product variant is required'),
+  })
+  .strict();
 
-export const updateProductSchema = z.object({
-  name: z.string().trim().min(2).max(200).optional(),
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    .max(220)
-    .optional(),
-  description: z.string().trim().min(10).optional(),
-  shortDescription: z.string().trim().max(500).nullable().optional(),
-  categoryId: z.string().trim().min(1).optional(),
-  status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
-  isFeatured: z.boolean().optional(),
-  metaTitle: z.string().trim().max(100).nullable().optional(),
-  metaDescription: z.string().trim().max(300).nullable().optional(),
-  metaKeywords: z.string().trim().max(200).nullable().optional(),
-  tags: z.array(z.string().trim().min(1)).optional(),
-  relatedProductIds: z.array(z.string().trim()).optional(),
-});
+export const updateProductSchema = z
+  .object({
+    name: z.string().trim().min(2).max(200).optional(),
+    slug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .max(220)
+      .optional(),
+    description: z.string().trim().min(10).optional(),
+    shortDescription: z.string().trim().max(500).nullable().optional(),
+    categoryId: z.string().trim().min(1).optional(),
+    subcategoryId: z.string().trim().nullable().optional(),
+    videoUrl: z.string().trim().nullable().optional(),
+    mrp: z.coerce.number().positive().nullable().optional(),
+    discountType: z.enum(['NONE', 'PERCENTAGE', 'FIXED']).optional(),
+    discountValue: z.coerce.number().min(0).nullable().optional(),
+    freeShipping: z.boolean().optional(),
+    specialOffer: z.boolean().optional(),
+    inventoryType: z.enum(['READY_STOCK', 'PRE_ORDER', 'MADE_TO_ORDER']).optional(),
+    specifications: z.record(z.string(), z.unknown()).optional(),
+    seo: z
+      .object({
+        metaTitle: z.string().trim().max(100).nullable().optional(),
+        metaDescription: z.string().trim().max(300).nullable().optional(),
+        metaKeywords: z.string().trim().max(200).nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
+    isFeatured: z.boolean().optional(),
+    metaTitle: z.string().trim().max(100).nullable().optional(),
+    metaDescription: z.string().trim().max(300).nullable().optional(),
+    metaKeywords: z.string().trim().max(200).nullable().optional(),
+    tags: z.array(z.string().trim().min(1)).optional(),
+    relatedProductIds: z.array(z.string().trim()).optional(),
+  })
+  .strict();
 
 export const updateProductStatusSchema = z.object({
   status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED'], {

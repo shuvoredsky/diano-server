@@ -195,6 +195,11 @@ export interface CreateProductDto {
   metaTitle?: string | null;
   metaDescription?: string | null;
   metaKeywords?: string | null;
+  seo?: {
+    metaTitle?: string | null;
+    metaDescription?: string | null;
+    metaKeywords?: string | null;
+  };
   tags?: string[];
   relatedProductIds?: string[];
   variants: CreateVariantInput[];
@@ -220,6 +225,11 @@ export interface UpdateProductDto {
   metaTitle?: string | null;
   metaDescription?: string | null;
   metaKeywords?: string | null;
+  seo?: {
+    metaTitle?: string | null;
+    metaDescription?: string | null;
+    metaKeywords?: string | null;
+  };
   tags?: string[];
   relatedProductIds?: string[];
 }

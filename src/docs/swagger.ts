@@ -777,10 +777,63 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Image deleted' } },
       },
     },
+    '/api/v1/products/admin/form-options': {
+      get: {
+        tags: ['Catalog: Products'],
+        summary: 'Get all dynamic form configuration options, category tree, and limits for Admin product form',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Admin form options retrieved' } },
+      },
+    },
+    '/api/v1/products/{id}/images/thumbnail': {
+      post: {
+        tags: ['Catalog: Images'],
+        summary: 'Upload or replace product THUMBNAIL image (replaces previous, destroys old from Cloudinary)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 201: { description: 'Thumbnail uploaded and replaced' } },
+      },
+    },
+    '/api/v1/products/{id}/images/backview': {
+      post: {
+        tags: ['Catalog: Images'],
+        summary: 'Upload or replace product BACKVIEW image (replaces previous, destroys old from Cloudinary)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 201: { description: 'Backview uploaded and replaced' } },
+      },
+    },
+    '/api/v1/products/{id}/images/gallery': {
+      post: {
+        tags: ['Catalog: Images'],
+        summary: 'Upload GALLERY image (strictly max 4 gallery images per product)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 201: { description: 'Gallery image uploaded' } },
+      },
+    },
+    '/api/v1/categories/{id}/product-form-schema': {
+      get: {
+        tags: ['Catalog: Categories'],
+        summary: 'Get dynamic specification template for category (with ancestor inheritance)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Category product form schema retrieved' } },
+      },
+    },
+    '/api/v1/categories/{id}/specification-template': {
+      patch: {
+        tags: ['Catalog: Categories'],
+        summary: 'Update specification template field definitions for category (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Specification template updated' } },
+      },
+    },
     '/api/v1/products/{id}/images/reorder': {
       put: {
         tags: ['Catalog: Images'],
-        summary: 'Batch reorder gallery images for product',
+        summary: 'Batch reorder gallery images for product (GALLERY slot only)',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 200: { description: 'Images reordered' } },

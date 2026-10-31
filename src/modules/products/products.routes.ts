@@ -12,6 +12,13 @@ productsRouter.get('/featured', productsController.getPublicFeatured);
 
 // ================= Admin Endpoints =================
 productsRouter.get(
+  '/admin/form-options',
+  authenticate,
+  requirePermission('product:read'),
+  productsController.getAdminFormOptions,
+);
+
+productsRouter.get(
   '/admin/all',
   authenticate,
   requirePermission('product:read'),

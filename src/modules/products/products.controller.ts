@@ -60,6 +60,11 @@ export class ProductsController {
 
   // ================= Admin Endpoints =================
 
+  getAdminFormOptions = async (_req: Request, res: Response): Promise<Response> => {
+    const options = await this.service.getAdminFormOptions();
+    return ApiResponse.success(res, 'Admin product form options retrieved successfully', options);
+  };
+
   getAdminProducts = async (req: Request, res: Response): Promise<Response> => {
     const query = productQuerySchema.parse(req.query);
     const canViewCost = req.user
