@@ -138,7 +138,17 @@ ALTER TABLE "Order"
 ALTER TABLE "Payment"
   ADD CONSTRAINT "chk_payment_amount_positive" CHECK ("amount" > 0);
 
--- 5. Full-Text & Trigram Fuzzy Search (pg_trgm extension for catalog ILIKE search acceleration)
+-- 5. Product Image Slot Constraints (Partial Unique Indexes for 1 THUMBNAIL and 1 BACKVIEW per product)
+-- Note: Max 4 GALLERY slots are enforced in application service layer; raw SQL partial unique indexes enforce database-level single-slot exclusivity.
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_product_single_thumbnail"
+  ON "ProductImage" ("productId")
+  WHERE "slot" = 'THUMBNAIL';
+
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_product_single_backview"
+  ON "ProductImage" ("productId")
+  WHERE "slot" = 'BACKVIEW';
+
+-- 6. Full-Text & Trigram Fuzzy Search (pg_trgm extension for catalog ILIKE search acceleration)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE INDEX IF NOT EXISTS "idx_product_name_trgm" ON "Product" USING gin ("name" gin_trgm_ops);
@@ -147,22 +157,43 @@ CREATE INDEX IF NOT EXISTS "idx_product_description_trgm" ON "Product" USING gin
 
 ---
 
-## 4. Deletion & Data Retention Policies
+## 4. Pricing & MRP Architecture (M5b Clear Field Mapping)
+
+| Scope | Field | Purpose | Notes |
+|:---|:---|:---|:---|
+| **Product Level** | `Product.mrp` | Catalog Base Maximum Retail Price | Top-level baseline reference price. |
+| **Product Level** | `Product.discountType` | Discount Engine Method (`NONE`, `PERCENTAGE`, `FIXED`) | Applied at product catalog level. |
+| **Product Level** | `Product.discountValue` | Discount Quantum (Decimal) | Percentage (e.g. 15%) or Fixed BDT (e.g. 200 BDT). |
+| **Product Level** | *(Dynamic)* `sellingPrice` | Effective Product Base Price | Computed server-side via `calculatePricing({ mrp, discountType, discountValue })`. Never stored directly to avoid stale state. |
+| **Variant Level** | `ProductVariant.compareAtPrice` | Variant-Specific MRP Override | Optional strike-through price if variant differs from base `Product.mrp`. |
+| **Variant Level** | `ProductVariant.price` | Variant Effective Selling Price | The actual checkout selling price for this specific SKU unit. |
+| **Variant Level** | `ProductVariant.costPrice` | Cost of Goods Sold (Internal / COGS) | Strictly hidden from public DTOs; visible only to admins with `product:view_cost`. |
+
+---
+
+## 5. Deletion & Data Retention Policies
 
 | Category | Policy | Models | Rationale |
 |:---|:---:|:---|:---|
 | **Soft Delete** | `deletedAt DateTime?` | `User`, `Product`, `ProductVariant`, `Category`, `Coupon`, `Supplier` | Preserves referential integrity for historical orders while hiding entries from active catalogs and auth. |
-| **Cascade Delete** | `onDelete: Cascade` | `CartItem`, `WishlistItem`, `Session`, `RefreshToken`, `UserRole`, `RolePermission`, `ProductTag`, `RelatedProduct`, `ReviewImage`, `ReturnItem`, `ShipmentEvent`, `DeliveryAttempt`, `FlashSaleItem` | Ephemeral, dependent sub-items that have no business purpose if parent entity is deleted. |
+| **Cascade Delete** | `onDelete: Cascade` | `CartItem`, `WishlistItem`, `Session`, `RefreshToken`, `UserRole`, `RolePermission`, `ProductTag`, `RelatedProduct`, `ReviewImage`, `ReturnItem`, `ShipmentEvent`, `DeliveryAttempt`, `FlashSaleItem`, `ProductImage` | Ephemeral, dependent sub-items that have no business purpose if parent entity is deleted. |
 | **Strict Restrict** | `onDelete: Restrict` | `Order`, `OrderItem`, `Payment`, `PaymentEvent`, `StockMovement`, `Warehouse`, `Category` (parent), `Supplier` (purchase orders) | Prevents accidental deletion of financial records, stock ledgers, and catalog hierarchies with linked orders. |
 | **Immutable Append-Only** | Prohibit Update/Delete | `StockMovement`, `Order`, `OrderItem`, `Payment`, `PaymentEvent`, `AuditLog` | Legal, audit, and tax compliance. Historical transactions must never be modified. |
 
 ---
 
-## 5. Architectural Assumptions & Decisions Awaiting Confirmation
+## 6. Architectural Assumptions & Decisions Awaiting Confirmation
 
-1. **Guest Checkout Strategy:**
+1. **`InventoryType` Enum Assumption:**
+   - Values: `READY_STOCK` (default in-warehouse items), `PRE_ORDER` (sourced after order), `MADE_TO_ORDER` (custom tailoring / fashion manufacturing on order). Confirmation needed whether backorder tracking needs distinct flags.
+2. **Discount Precedence Rule (Product vs Flash-Sale vs Coupon):**
+   - **Level 1 (Highest): Flash Sale.** Active flash sale campaign price overrides product base discount and variant price during active window.
+   - **Level 2: Product Discount.** Applied to calculate catalog `sellingPrice` via `calculatePricing({ mrp, discountType, discountValue })` when no flash sale is active.
+   - **Level 3: Checkout Coupon Code.** Applied on top of item `sellingPrice` or subtotal unless the coupon has `excludeSaleItems: true`.
+3. **Guest Checkout Strategy:**
    - Unregistered guests generate a `CheckoutSession` with guest email and phone. When the order is placed, an unactivated `User` account is provisioned with status `PENDING_VERIFICATION` to anchor the `Order.customerId`, enabling seamless account claim later.
-2. **Double-Entry Stock Ledger:**
+4. **Double-Entry Stock Ledger:**
    - Every reservation and release during checkout writes to `StockMovement` as `ORDER_RESERVATION` and updates `Inventory.reserved`. Fulfillment writes `ORDER_FULFILLMENT` and decrements both `onHand` and `reserved`.
-3. **Multi-District Shipping Zones:**
+5. **Multi-District Shipping Zones:**
    - Instead of separate zone tables for every district, `ShippingZone.districts` stores a JSON array of district names, allowing admins to reassign districts through the admin UI without database migrations.
+

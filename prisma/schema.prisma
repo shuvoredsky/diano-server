@@ -195,6 +195,24 @@ enum DeviceCategory {
   OTHER
 }
 
+enum ProductImageSlot {
+  THUMBNAIL
+  BACKVIEW
+  GALLERY
+}
+
+enum InventoryType {
+  READY_STOCK
+  PRE_ORDER
+  MADE_TO_ORDER
+}
+
+enum DiscountType {
+  NONE
+  PERCENTAGE
+  FIXED
+}
+
 // ==============================================================================
 // AUTHENTICATION & RBAC
 // ==============================================================================
@@ -468,18 +486,19 @@ model ConsentRecord {
 // ==============================================================================
 
 model Category {
-  id          String    @id @default(cuid())
-  name        String
-  slug        String    @unique
-  description String?
-  image       String?
-  parentId    String?
-  isFeatured  Boolean   @default(false)
-  isActive    Boolean   @default(true)
-  sortOrder   Int       @default(0)
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  name                  String
+  slug                  String    @unique
+  description           String?
+  image                 String?
+  parentId              String?
+  specificationTemplate Json      @default("[]")
+  isFeatured            Boolean   @default(false)
+  isActive              Boolean   @default(true)
+  sortOrder             Int       @default(0)
+  deletedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children Category[] @relation("CategoryHierarchy")
@@ -491,21 +510,29 @@ model Category {
 }
 
 model Product {
-  id               String    @id @default(cuid())
+  id               String        @id @default(cuid())
   name             String
-  slug             String    @unique
+  slug             String        @unique
   description      String
   shortDescription String?
   categoryId       String
-  status           String    @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
-  isFeatured       Boolean   @default(false)
+  videoUrl         String?
+  freeShipping     Boolean       @default(false)
+  inventoryType    InventoryType @default(READY_STOCK)
+  specifications   Json          @default("{}")
+  discountType     DiscountType  @default(NONE)
+  discountValue    Decimal?      @db.Decimal(12, 2)
+  specialOffer     Boolean       @default(false)
+  mrp              Decimal?      @db.Decimal(12, 2)
+  status           String        @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  isFeatured       Boolean       @default(false)
   metaTitle        String?
   metaDescription  String?
   metaKeywords     String?
-  viewCount        Int       @default(0)
+  viewCount        Int           @default(0)
   deletedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   category      Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   variants      ProductVariant[]
@@ -521,6 +548,7 @@ model Product {
   @@index([slug])
   @@index([status, deletedAt])
   @@index([isFeatured])
+  @@index([inventoryType])
 }
 
 model ProductVariant {
@@ -554,20 +582,27 @@ model ProductVariant {
 }
 
 model ProductImage {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   productId String
   variantId String?
+  slot      ProductImageSlot @default(GALLERY)
   url       String
+  publicId  String?
+  width     Int?
+  height    Int?
+  format    String?
+  bytes     Int?
   altText   String?
-  isPrimary Boolean  @default(false)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
+  isPrimary Boolean          @default(false)
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
 
   product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([productId])
   @@index([variantId])
+  @@index([productId, slot])
 }
 
 model ProductAttribute {

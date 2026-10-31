@@ -296,6 +296,91 @@ export async function seedDatabase() {
     });
   }
 
+  // 6b. Seed Default Fashion Specification Template
+  // eslint-disable-next-line no-console
+  console.info('Seeding default fashion specification template...');
+  const fashionSpecificationTemplate = [
+    {
+      key: 'colour',
+      label: 'Colour',
+      type: 'text',
+      required: true,
+      options: [],
+      sortOrder: 1,
+    },
+    {
+      key: 'fabric',
+      label: 'Fabric',
+      type: 'select',
+      required: true,
+      options: ['100% Cotton', 'Linen', 'Denim', 'Silk', 'Viscose', 'Polyester Blend'],
+      sortOrder: 2,
+    },
+    {
+      key: 'fit',
+      label: 'Fit',
+      type: 'select',
+      required: true,
+      options: ['Slim Fit', 'Regular Fit', 'Relaxed Fit', 'Oversized'],
+      sortOrder: 3,
+    },
+    {
+      key: 'sleeve',
+      label: 'Sleeve',
+      type: 'select',
+      required: false,
+      options: ['Full Sleeve', 'Half Sleeve', 'Sleeveless'],
+      sortOrder: 4,
+    },
+    {
+      key: 'collar',
+      label: 'Collar',
+      type: 'select',
+      required: false,
+      options: ['Spread Collar', 'Button-Down Collar', 'Mandarin Collar', 'Cuban Collar', 'Round Neck', 'V-Neck'],
+      sortOrder: 5,
+    },
+    {
+      key: 'pocket',
+      label: 'Pocket',
+      type: 'select',
+      required: false,
+      options: ['Single Chest Pocket', 'No Pocket', 'Double Flap Pockets'],
+      sortOrder: 6,
+    },
+    {
+      key: 'length',
+      label: 'Length',
+      type: 'text',
+      required: false,
+      options: [],
+      sortOrder: 7,
+    },
+    {
+      key: 'care',
+      label: 'Care Instructions',
+      type: 'text',
+      required: false,
+      options: [],
+      sortOrder: 8,
+    },
+  ];
+
+  await prisma.category.upsert({
+    where: { slug: 'apparel' },
+    update: {
+      specificationTemplate: fashionSpecificationTemplate,
+    },
+    create: {
+      name: 'Apparel',
+      slug: 'apparel',
+      description: 'Men & Women Fashion Apparel',
+      specificationTemplate: fashionSpecificationTemplate,
+      isActive: true,
+      sortOrder: 1,
+    },
+  });
+
   // 7. Seed Dev Super Admin (Only if credentials provided in env)
   const adminEmail = process.env.SEED_ADMIN_EMAIL;
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
