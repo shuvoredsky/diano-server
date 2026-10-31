@@ -52,6 +52,8 @@ const envSchema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Asia/Dhaka'),
 
   // External Integrations (Optional)
+  STORAGE_DRIVER: z.enum(['local', 'cloudinary']).default('local'),
+  MAX_FILE_SIZE_BYTES: z.coerce.number().positive().default(5 * 1024 * 1024),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),

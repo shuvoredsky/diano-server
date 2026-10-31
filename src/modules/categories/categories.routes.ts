@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { categoriesController } from './categories.controller';
 import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
+import { handleUploadSingle } from '@/middlewares/upload.middleware';
 
 export const categoriesRouter = Router();
 
@@ -56,6 +57,14 @@ categoriesRouter.patch(
   authenticate,
   requirePermission('category:update'),
   categoriesController.updateImage,
+);
+
+categoriesRouter.post(
+  '/:id/image',
+  authenticate,
+  requirePermission('category:update'),
+  handleUploadSingle('image'),
+  categoriesController.uploadImage,
 );
 
 categoriesRouter.put(

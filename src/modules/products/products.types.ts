@@ -209,4 +209,22 @@ export interface IProductsRepository {
   // Related products
   setRelatedProducts(productId: string, relatedProductIds: string[]): Promise<void>;
   findRelatedProducts(productId: string): Promise<ProductEntity[]>;
+
+  // Image operations
+  createImage(data: {
+    productId: string;
+    variantId?: string | null;
+    url: string;
+    altText?: string | null;
+    isPrimary?: boolean;
+    sortOrder?: number;
+  }): Promise<ProductImageEntity>;
+  updateImage(
+    imageId: string,
+    data: { altText?: string | null; isPrimary?: boolean; sortOrder?: number },
+  ): Promise<ProductImageEntity>;
+  findImageById(imageId: string): Promise<ProductImageEntity | null>;
+  deleteImage(imageId: string): Promise<void>;
+  unsetPrimaryImages(productId: string): Promise<void>;
+  reorderImages(items: Array<{ id: string; sortOrder: number }>): Promise<void>;
 }

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { ApiResponse } from '@/utils/api-response';
+import { AppError } from '@/utils/app-error';
 import { categoriesService, type CategoriesService } from './categories.service';
 import {
   createCategorySchema,
@@ -77,6 +78,18 @@ export class CategoriesController {
       req.user,
     );
     return ApiResponse.success(res, 'Category image updated successfully', updated);
+  };
+
+  uploadImage = async (req: Request, res: Response): Promise<Response> => {
+    if (!req.file) {
+      throw AppError.badRequest('No image file provided');
+    }
+    const updated = await this.service.uploadCategoryImage(
+      req.params.id as string,
+      req.file,
+      req.user,
+    );
+    return ApiResponse.success(res, 'Category image uploaded successfully', updated);
   };
 
   reorderCategories = async (req: Request, res: Response): Promise<Response> => {

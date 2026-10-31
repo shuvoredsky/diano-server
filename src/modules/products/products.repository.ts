@@ -5,6 +5,7 @@ import type {
   CreateVariantInput,
   IProductsRepository,
   ProductEntity,
+  ProductImageEntity,
   ProductQueryFilter,
   ProductVariantEntity,
   UpdateProductDto,
@@ -423,6 +424,70 @@ export class PrismaProductsRepository implements IProductsRepository {
     return records
       .map(r => r.relatedProduct)
       .filter(p => p.status === 'ACTIVE' && p.deletedAt === null) as unknown as ProductEntity[];
+  }
+
+  async createImage(data: {
+    productId: string;
+    variantId?: string | null;
+    url: string;
+    altText?: string | null;
+    isPrimary?: boolean;
+    sortOrder?: number;
+  }): Promise<ProductImageEntity> {
+    return prisma.productImage.create({
+      data: {
+        productId: data.productId,
+        variantId: data.variantId ?? null,
+        url: data.url,
+        altText: data.altText ?? null,
+        isPrimary: data.isPrimary ?? false,
+        sortOrder: data.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async updateImage(
+    imageId: string,
+    data: { altText?: string | null; isPrimary?: boolean; sortOrder?: number },
+  ): Promise<ProductImageEntity> {
+    return prisma.productImage.update({
+      where: { id: imageId },
+      data: {
+        ...(data.altText !== undefined ? { altText: data.altText } : {}),
+        ...(data.isPrimary !== undefined ? { isPrimary: data.isPrimary } : {}),
+        ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+      },
+    });
+  }
+
+  async findImageById(imageId: string): Promise<ProductImageEntity | null> {
+    return prisma.productImage.findUnique({
+      where: { id: imageId },
+    });
+  }
+
+  async deleteImage(imageId: string): Promise<void> {
+    await prisma.productImage.delete({
+      where: { id: imageId },
+    });
+  }
+
+  async unsetPrimaryImages(productId: string): Promise<void> {
+    await prisma.productImage.updateMany({
+      where: { productId, isPrimary: true },
+      data: { isPrimary: false },
+    });
+  }
+
+  async reorderImages(items: Array<{ id: string; sortOrder: number }>): Promise<void> {
+    await prisma.$transaction(
+      items.map(item =>
+        prisma.productImage.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        }),
+      ),
+    );
   }
 }
 

@@ -141,6 +141,23 @@ export const productQuerySchema = paginationQuerySchema.extend({
     .default('newest'),
 });
 
+export const updateProductImageSchema = z.object({
+  altText: z.string().trim().max(200).optional(),
+  isPrimary: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+});
+
+export const reorderProductImagesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1, 'Image ID is required'),
+        sortOrder: z.coerce.number().int().min(0),
+      }),
+    )
+    .min(1, 'At least one item required for reordering'),
+});
+
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export type UpdateProductStatusInput = z.infer<typeof updateProductStatusSchema>;
@@ -148,3 +165,5 @@ export type UpdateProductFeaturedInput = z.infer<typeof updateProductFeaturedSch
 export type VariantInput = z.infer<typeof variantInputSchema>;
 export type UpdateVariantInput = z.infer<typeof updateVariantSchema>;
 export type ProductQueryInput = z.infer<typeof productQuerySchema>;
+export type UpdateProductImageInput = z.infer<typeof updateProductImageSchema>;
+export type ReorderProductImagesInput = z.infer<typeof reorderProductImagesSchema>;

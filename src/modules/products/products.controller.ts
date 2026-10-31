@@ -9,9 +9,12 @@ import {
   variantInputSchema,
   updateVariantSchema,
   productQuerySchema,
+  updateProductImageSchema,
+  reorderProductImagesSchema,
 } from './products.validation';
 import { permissionsCache } from '@/modules/permissions/permissions.cache';
 import { getPaginationMeta } from '@/utils/pagination';
+import { AppError } from '@/utils/app-error';
 
 export class ProductsController {
   constructor(private readonly service: ProductsService = productsService) {}
@@ -127,6 +130,46 @@ export class ProductsController {
   deleteVariant = async (req: Request, res: Response): Promise<Response> => {
     const deleted = await this.service.deleteVariant(req.params.variantId as string, req.user);
     return ApiResponse.success(res, 'Variant deleted successfully', deleted);
+  };
+
+  uploadImages = async (req: Request, res: Response): Promise<Response> => {
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) {
+      throw AppError.badRequest('No image files provided for upload');
+    }
+
+    const isPrimary = req.body.isPrimary === 'true' || req.body.isPrimary === true;
+    const variantId = req.body.variantId ? String(req.body.variantId) : undefined;
+    const altText = req.body.altText ? String(req.body.altText) : undefined;
+
+    const images = await this.service.uploadProductImages(
+      req.params.id as string,
+      files,
+      { variantId, isPrimary, altText },
+      req.user,
+    );
+    return ApiResponse.created(res, 'Product images uploaded successfully', images);
+  };
+
+  updateImage = async (req: Request, res: Response): Promise<Response> => {
+    const input = updateProductImageSchema.parse(req.body);
+    const updated = await this.service.updateProductImage(
+      req.params.imageId as string,
+      input,
+      req.user,
+    );
+    return ApiResponse.success(res, 'Product image updated successfully', updated);
+  };
+
+  deleteImage = async (req: Request, res: Response): Promise<Response> => {
+    await this.service.deleteProductImage(req.params.imageId as string, req.user);
+    return ApiResponse.success(res, 'Product image deleted successfully');
+  };
+
+  reorderImages = async (req: Request, res: Response): Promise<Response> => {
+    const input = reorderProductImagesSchema.parse(req.body);
+    await this.service.reorderProductImages(req.params.id as string, input.items, req.user);
+    return ApiResponse.success(res, 'Product images reordered successfully');
   };
 }
 

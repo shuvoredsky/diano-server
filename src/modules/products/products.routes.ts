@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { productsController } from './products.controller';
 import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
+import { handleUploadMultiple } from '@/middlewares/upload.middleware';
 
 export const productsRouter = Router();
 
@@ -79,6 +80,36 @@ productsRouter.delete(
   authenticate,
   requirePermission('product:delete'),
   productsController.deleteVariant,
+);
+
+// Image Gallery Management
+productsRouter.post(
+  '/:id/images',
+  authenticate,
+  requirePermission('product:update'),
+  handleUploadMultiple('images', 10),
+  productsController.uploadImages,
+);
+
+productsRouter.patch(
+  '/:id/images/:imageId',
+  authenticate,
+  requirePermission('product:update'),
+  productsController.updateImage,
+);
+
+productsRouter.delete(
+  '/:id/images/:imageId',
+  authenticate,
+  requirePermission('product:delete'),
+  productsController.deleteImage,
+);
+
+productsRouter.put(
+  '/:id/images/reorder',
+  authenticate,
+  requirePermission('product:update'),
+  productsController.reorderImages,
 );
 
 // Public Slug endpoints (placed after specific static segments)

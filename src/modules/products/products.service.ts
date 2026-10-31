@@ -12,6 +12,7 @@ import type {
   PublicVariantDto,
   UpdateProductDto,
   UpdateVariantDto,
+  ProductImageEntity,
 } from './products.types';
 import { productsRepository as defaultProductsRepo } from './products.repository';
 import type { ICategoriesRepository } from '@/modules/categories/categories.types';
@@ -19,12 +20,14 @@ import { categoriesRepository as defaultCategoriesRepo } from '@/modules/categor
 import type { IAuditService } from '@/services/audit.service';
 import { auditService as defaultAuditService } from '@/services/audit.service';
 import type { AccessTokenPayload } from '@/utils/jwt.util';
+import { storageService as defaultStorageService, type StorageService } from '@/services/storage.service';
 
 export class ProductsService {
   constructor(
     private readonly repo: IProductsRepository = defaultProductsRepo,
     private readonly categoriesRepo: ICategoriesRepository = defaultCategoriesRepo,
     private readonly auditSvc: IAuditService = defaultAuditService,
+    private readonly storageSvc: StorageService = defaultStorageService,
   ) {}
 
   private slugify(text: string): string {
@@ -616,6 +619,149 @@ export class ProductsService {
     );
 
     return result.items.map(p => this.formatPublicProduct(p));
+  }
+
+  /**
+   * Admin: Upload images for a product or variant gallery
+   */
+  async uploadProductImages(
+    productId: string,
+    files: Array<{ buffer: Buffer; originalname: string; mimetype: string }>,
+    options: { variantId?: string; isPrimary?: boolean; altText?: string } = {},
+    actor?: AccessTokenPayload,
+  ): Promise<ProductImageEntity[]> {
+    const product = await this.repo.findById(productId);
+    if (!product) {
+      throw AppError.notFound('Product not found');
+    }
+
+    if (options.variantId) {
+      const variant = await this.repo.findVariantById(options.variantId);
+      if (!variant || variant.productId !== productId) {
+        throw AppError.notFound('Target variant not found on this product');
+      }
+    }
+
+    if (options.isPrimary) {
+      await this.repo.unsetPrimaryImages(productId);
+    }
+
+    const createdImages: ProductImageEntity[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
+      const uploadResult = await this.storageSvc.uploadImage(file, 'products');
+
+      const isPrimaryForFile = options.isPrimary && i === 0;
+      const img = await this.repo.createImage({
+        productId,
+        variantId: options.variantId ?? null,
+        url: uploadResult.url,
+        altText: options.altText ?? product.name,
+        isPrimary: isPrimaryForFile ?? false,
+        sortOrder: i,
+      });
+      createdImages.push(img);
+    }
+
+    if (actor) {
+      await this.auditSvc.record({
+        actorId: actor.userId,
+        actorType: 'USER',
+        action: 'PRODUCT_IMAGES_UPLOADED',
+        targetType: 'PRODUCT',
+        targetId: productId,
+        metadata: { count: createdImages.length },
+      });
+    }
+
+    return createdImages;
+  }
+
+  /**
+   * Admin: Update product image metadata
+   */
+  async updateProductImage(
+    imageId: string,
+    data: { altText?: string; isPrimary?: boolean; sortOrder?: number },
+    actor?: AccessTokenPayload,
+  ): Promise<ProductImageEntity> {
+    const image = await this.repo.findImageById(imageId);
+    if (!image) {
+      throw AppError.notFound('Product image not found');
+    }
+
+    if (data.isPrimary) {
+      await this.repo.unsetPrimaryImages(image.productId);
+    }
+
+    const updated = await this.repo.updateImage(imageId, data);
+
+    if (actor) {
+      await this.auditSvc.record({
+        actorId: actor.userId,
+        actorType: 'USER',
+        action: 'PRODUCT_IMAGE_UPDATED',
+        targetType: 'PRODUCT_IMAGE',
+        targetId: imageId,
+      });
+    }
+
+    return updated;
+  }
+
+  /**
+   * Admin: Delete product image (DB + storage deletion)
+   */
+  async deleteProductImage(imageId: string, actor?: AccessTokenPayload): Promise<void> {
+    const image = await this.repo.findImageById(imageId);
+    if (!image) {
+      throw AppError.notFound('Product image not found');
+    }
+
+    await this.repo.deleteImage(imageId);
+
+    const storageKey = image.url.startsWith('/uploads/')
+      ? image.url.replace('/uploads/', '')
+      : image.url;
+    await this.storageSvc.deleteImage(storageKey);
+
+    if (actor) {
+      await this.auditSvc.record({
+        actorId: actor.userId,
+        actorType: 'USER',
+        action: 'PRODUCT_IMAGE_DELETED',
+        targetType: 'PRODUCT_IMAGE',
+        targetId: imageId,
+        metadata: { url: image.url },
+      });
+    }
+  }
+
+  /**
+   * Admin: Batch reorder product images
+   */
+  async reorderProductImages(
+    productId: string,
+    items: Array<{ id: string; sortOrder: number }>,
+    actor?: AccessTokenPayload,
+  ): Promise<void> {
+    const product = await this.repo.findById(productId);
+    if (!product) {
+      throw AppError.notFound('Product not found');
+    }
+
+    await this.repo.reorderImages(items);
+
+    if (actor) {
+      await this.auditSvc.record({
+        actorId: actor.userId,
+        actorType: 'USER',
+        action: 'PRODUCT_IMAGES_REORDERED',
+        targetType: 'PRODUCT',
+        targetId: productId,
+        metadata: { count: items.length },
+      });
+    }
   }
 }
 

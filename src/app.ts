@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -56,6 +57,9 @@ app.use(baseRateLimiter);
 
 // API Version 1 Routes
 app.use(env.API_PREFIX, rootRouter);
+
+// Static file serving for local uploads (development)
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // Swagger API Documentation (non-production only)
 setupSwagger(app);

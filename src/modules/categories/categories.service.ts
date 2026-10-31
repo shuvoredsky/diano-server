@@ -13,11 +13,13 @@ import { categoriesRepository as defaultCategoriesRepo } from './categories.repo
 import type { IAuditService } from '@/services/audit.service';
 import { auditService as defaultAuditService } from '@/services/audit.service';
 import type { AccessTokenPayload } from '@/utils/jwt.util';
+import { storageService as defaultStorageService, type StorageService } from '@/services/storage.service';
 
 export class CategoriesService {
   constructor(
     private readonly repo: ICategoriesRepository = defaultCategoriesRepo,
     private readonly auditSvc: IAuditService = defaultAuditService,
+    private readonly storageSvc: StorageService = defaultStorageService,
   ) {}
 
   /**
@@ -296,6 +298,23 @@ export class CategoriesService {
     }
 
     return updated;
+  }
+
+  /**
+   * Admin: Upload category image file
+   */
+  async uploadCategoryImage(
+    id: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+    actor?: AccessTokenPayload,
+  ): Promise<CategoryEntity> {
+    const category = await this.repo.findById(id);
+    if (!category) {
+      throw AppError.notFound('Category not found');
+    }
+
+    const uploadResult = await this.storageSvc.uploadImage(file, 'categories');
+    return this.updateImage(id, uploadResult.url, actor);
   }
 
   /**
