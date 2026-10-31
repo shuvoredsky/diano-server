@@ -111,13 +111,18 @@ The DIANO database is structured as a high-integrity relational model designed f
 Prisma Schema Language (PSL) cannot express arbitrary relational `CHECK` constraints. When generating the first database migration via `npx prisma migrate dev`, the following `CHECK` constraints **must be appended to the migration SQL script**:
 
 ```sql
--- 1. Inventory Integrity
+-- 1. Inventory Integrity & Stock Definitions
+-- Definitions:
+-- onHand: Physical units physically present in the warehouse.
+-- reserved: Units committed to active customer checkouts or unfulfilled placed orders.
+-- damaged: Units damaged, broken, or expired; physically quarantined from sale.
+-- availableStock = onHand - reserved - damaged.
 ALTER TABLE "Inventory"
   ADD CONSTRAINT "chk_inventory_on_hand_non_negative" CHECK ("onHand" >= 0),
   ADD CONSTRAINT "chk_inventory_reserved_non_negative" CHECK ("reserved" >= 0),
   ADD CONSTRAINT "chk_inventory_damaged_non_negative" CHECK ("damaged" >= 0),
   ADD CONSTRAINT "chk_inventory_safety_stock_non_negative" CHECK ("safetyStock" >= 0),
-  ADD CONSTRAINT "chk_inventory_reserved_within_on_hand" CHECK ("reserved" <= "onHand");
+  ADD CONSTRAINT "chk_inventory_available_stock_non_negative" CHECK (("onHand" - "reserved" - "damaged") >= 0);
 
 -- 2. Review Rating Boundaries
 ALTER TABLE "Review"
@@ -153,6 +158,32 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE INDEX IF NOT EXISTS "idx_product_name_trgm" ON "Product" USING gin ("name" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "idx_product_description_trgm" ON "Product" USING gin ("description" gin_trgm_ops);
+
+-- 7. StockMovement Append-Only Immutability Trigger (Prohibits UPDATE & DELETE at PostgreSQL engine level)
+CREATE OR REPLACE FUNCTION prevent_stock_movement_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'StockMovement is an immutable append-only ledger: UPDATE and DELETE operations are strictly prohibited.'
+    USING ERRCODE = 'restrict_violation';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_block_stock_movement_mutation ON "StockMovement";
+CREATE TRIGGER trg_block_stock_movement_mutation
+  BEFORE UPDATE OR DELETE ON "StockMovement"
+  FOR EACH ROW
+  EXECUTE FUNCTION prevent_stock_movement_mutation();
+
+-- 8. Purchase Order Procurement Integrity (Over-receive blocking & non-negative costs)
+ALTER TABLE "PurchaseOrderItem"
+  ADD CONSTRAINT "chk_po_item_ordered_qty_positive" CHECK ("orderedQuantity" > 0),
+  ADD CONSTRAINT "chk_po_item_received_qty_bounds" CHECK ("receivedQuantity" >= 0 AND "receivedQuantity" <= "orderedQuantity"),
+  ADD CONSTRAINT "chk_po_item_unit_cost_non_negative" CHECK ("unitCost" >= 0);
+
+-- 9. Stock Audit Item Boundaries
+ALTER TABLE "StockAuditItem"
+  ADD CONSTRAINT "chk_stock_audit_system_qty_non_negative" CHECK ("systemQuantity" >= 0),
+  ADD CONSTRAINT "chk_stock_audit_counted_qty_non_negative" CHECK ("countedQuantity" >= 0);
 ```
 
 ---
