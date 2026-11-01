@@ -1,5 +1,6 @@
 import { AppError } from '@/utils/app-error';
-import { auditService, type IAuditService } from '@/services/audit.service';
+import { auditService, type IAuditService, recordAuditSafe } from '@/services/audit.service';
+import { ensureFound } from '@/utils/entity.util';
 import { suppliersRepository } from './suppliers.repository';
 import type {
   ISuppliersRepository,
@@ -22,10 +23,7 @@ export class SuppliersService {
 
   async getSupplierById(id: string): Promise<SupplierEntity> {
     const supplier = await this.repo.findSupplierById(id);
-    if (!supplier) {
-      throw AppError.notFound(`Supplier with ID '${id}' not found`);
-    }
-    return supplier;
+    return ensureFound(supplier, 'Supplier', id);
   }
 
   async createSupplier(
@@ -59,19 +57,10 @@ export class SuppliersService {
       code,
     });
 
-    if (actor) {
-      await this.auditSvc.record({
-        actorId: actor.userId,
-        actorType: 'USER',
-        action: 'SUPPLIER_CREATED',
-        targetType: 'SUPPLIER',
-        targetId: supplier.id,
-        metadata: {
-          supplierName: supplier.name,
-          supplierCode: supplier.code,
-        },
-      });
-    }
+    await recordAuditSafe(this.auditSvc, actor, 'SUPPLIER_CREATED', 'SUPPLIER', supplier.id, {
+      supplierName: supplier.name,
+      supplierCode: supplier.code,
+    });
 
     return supplier;
   }
@@ -99,18 +88,9 @@ export class SuppliersService {
 
     const updated = await this.repo.updateSupplier(id, dto);
 
-    if (actor) {
-      await this.auditSvc.record({
-        actorId: actor.userId,
-        actorType: 'USER',
-        action: 'SUPPLIER_UPDATED',
-        targetType: 'SUPPLIER',
-        targetId: id,
-        metadata: {
-          changes: dto,
-        },
-      });
-    }
+    await recordAuditSafe(this.auditSvc, actor, 'SUPPLIER_UPDATED', 'SUPPLIER', id, {
+      changes: dto,
+    });
 
     return updated;
   }
@@ -123,19 +103,10 @@ export class SuppliersService {
 
     const deleted = await this.repo.softDeleteSupplier(id);
 
-    if (actor) {
-      await this.auditSvc.record({
-        actorId: actor.userId,
-        actorType: 'USER',
-        action: 'SUPPLIER_DELETED',
-        targetType: 'SUPPLIER',
-        targetId: id,
-        metadata: {
-          supplierName: supplier.name,
-          supplierCode: supplier.code,
-        },
-      });
-    }
+    await recordAuditSafe(this.auditSvc, actor, 'SUPPLIER_DELETED', 'SUPPLIER', id, {
+      supplierName: supplier.name,
+      supplierCode: supplier.code,
+    });
 
     return deleted;
   }

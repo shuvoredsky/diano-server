@@ -69,3 +69,23 @@ export const formatBDT = (amount: NumericValue): string => {
   const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return `${DEFAULT_CURRENCY} ${formattedInt}.${decPart}`;
 };
+
+/**
+ * Safely converts Prisma Decimal, number, string, or null/undefined to standard JavaScript number
+ */
+export const toNumberSafe = (value: unknown, fallback = 0): number => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'number') return value;
+  if (typeof (value as { toNumber?: () => number }).toNumber === 'function') {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+  const parsed = Number(value);
+  return isNaN(parsed) ? fallback : parsed;
+};
+
+/**
+ * Standardizes a money value to a fixed 2-decimal string representation
+ */
+export const toMoneyString = (value: unknown): string => {
+  return toNumberSafe(value).toFixed(2);
+};

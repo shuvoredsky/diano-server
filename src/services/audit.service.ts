@@ -49,3 +49,33 @@ export class PrismaAuditService implements IAuditService {
 }
 
 export const auditService: IAuditService = new PrismaAuditService();
+
+export interface ActorContext {
+  userId?: string;
+  email?: string;
+  actorType?: 'USER' | 'SYSTEM' | 'GUEST' | 'WEBHOOK';
+}
+
+/**
+ * Standardized audit helper that verifies actor attribution and records audit log safely
+ */
+export const recordAuditSafe = async (
+  auditSvc: IAuditService,
+  actor: ActorContext | undefined,
+  action: string,
+  targetType: string,
+  targetId?: string,
+  metadata?: Record<string, unknown>,
+): Promise<void> => {
+  if (!actor?.userId && actor?.actorType !== 'SYSTEM' && actor?.actorType !== 'WEBHOOK') {
+    return;
+  }
+  await auditSvc.record({
+    actorId: actor?.userId,
+    actorType: actor?.actorType ?? 'USER',
+    action,
+    targetType,
+    targetId,
+    metadata,
+  });
+};
