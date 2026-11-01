@@ -1,4 +1,5 @@
 import { prisma } from '@/config/database';
+import type { Prisma } from '@prisma/client';
 import { toNumberSafe } from '@/utils/currency.util';
 import type { CheckoutSessionEntity, CheckoutCartSnapshot, CheckoutStatus, DeviceCategory, CheckoutEventType } from '@/modules/checkout/checkout.types';
 import type {
@@ -93,7 +94,7 @@ export class AbandonedCheckoutRepository implements IAbandonedCheckoutRepository
     await prisma.checkoutSession.update({
       where: { id },
       data: {
-        status: status as any,
+        status: status as unknown as CheckoutStatus,
         ...(abandonedAt && { abandonedAt }),
       },
     });
@@ -103,10 +104,10 @@ export class AbandonedCheckoutRepository implements IAbandonedCheckoutRepository
     items: CheckoutSessionEntity[];
     total: number;
   }> {
-    const where: any = {};
+    const where: Prisma.CheckoutSessionWhereInput = {};
 
     if (params.status) {
-      where.status = params.status;
+      where.status = params.status as unknown as Prisma.CheckoutSessionWhereInput['status'];
     }
 
     if (params.fromDate || params.toDate) {
@@ -189,7 +190,7 @@ export class AbandonedCheckoutRepository implements IAbandonedCheckoutRepository
         channel: data.channel,
         consentRecordId: data.consentRecordId ?? null,
         status: data.status,
-        metadata: (data.metadata ?? {}) as any,
+        metadata: (data.metadata ?? {}) as unknown as Prisma.InputJsonValue,
         sentAt: new Date(),
       },
     });

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import Decimal from 'decimal.js';
 import { AppError } from '@/utils/app-error';
 import { prisma } from '@/config/database';
+import type { Prisma } from '@prisma/client';
 import { cartService } from '@/modules/cart/cart.service';
 import { defaultShippingCalculator, type IShippingCalculator } from './checkout.shipping';
 import { defaultCouponCalculator, type ICouponCalculator } from './checkout.coupon';
@@ -559,7 +560,7 @@ export class CheckoutService {
 
       let count = 0;
       for (const s of expiredSessions) {
-        const snap = s.cartSnapshot as any;
+        const snap = s.cartSnapshot as unknown as CheckoutCartSnapshot;
         if (snap?.customerInfo || snap?.shippingAddress) {
           const anonymizedSnap = {
             ...snap,
@@ -573,7 +574,7 @@ export class CheckoutService {
 
           await prisma.checkoutSession.update({
             where: { id: s.id },
-            data: { cartSnapshot: anonymizedSnap },
+            data: { cartSnapshot: anonymizedSnap as unknown as Prisma.InputJsonValue },
           });
           count++;
         }
@@ -594,7 +595,7 @@ export class CheckoutService {
       });
 
       for (const s of userSessions) {
-        const snap = s.cartSnapshot as any;
+        const snap = s.cartSnapshot as unknown as CheckoutCartSnapshot;
         const anonymizedSnap = {
           ...snap,
           customerInfo: undefined,
@@ -605,7 +606,7 @@ export class CheckoutService {
           where: { id: s.id },
           data: {
             userId: null,
-            cartSnapshot: anonymizedSnap,
+            cartSnapshot: anonymizedSnap as unknown as Prisma.InputJsonValue,
           },
         });
       }

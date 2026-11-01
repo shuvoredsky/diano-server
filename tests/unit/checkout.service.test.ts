@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CheckoutService } from '@/modules/checkout/checkout.service';
 import type { ICheckoutRepository, CheckoutSessionEntity } from '@/modules/checkout/checkout.types';
+import type { CartService } from '@/modules/cart/cart.service';
+import type { IShippingCalculator } from '@/modules/checkout/checkout.shipping';
+import type { ICouponCalculator } from '@/modules/checkout/checkout.coupon';
 import { customerInfoSchema, checkoutEventSchema } from '@/modules/checkout/checkout.validation';
 
 describe('CheckoutService (Unit Tests with Mocked Repository)', () => {
@@ -126,9 +129,9 @@ describe('CheckoutService (Unit Tests with Mocked Repository)', () => {
 
     service = new CheckoutService(
       mockRepo as ICheckoutRepository,
-      mockCartSvc as any,
-      mockShippingCalc as any,
-      mockCouponCalc as any,
+      mockCartSvc as unknown as CartService,
+      mockShippingCalc as unknown as IShippingCalculator,
+      mockCouponCalc as unknown as ICouponCalculator,
     );
   });
 
@@ -194,7 +197,7 @@ describe('CheckoutService (Unit Tests with Mocked Repository)', () => {
       const res = await service.getSession('session_abc123', 'user-1');
 
       expect(mockRepo.updateSession).toHaveBeenCalled();
-      const updateCall = (mockRepo.updateSession as any).mock.calls[0][1];
+      const updateCall = vi.mocked(mockRepo.updateSession).mock.calls[0]?.[1] as { expiresAt: Date | string };
       expect(new Date(updateCall.expiresAt).getTime()).toBeGreaterThan(before);
       expect(res.totals.grandTotal).toBe('2460.00');
     });

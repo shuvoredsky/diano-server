@@ -20,7 +20,19 @@ vi.mock('@/config/database', () => ({
 }));
 
 describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
-  let mockRepo: Partial<ICartRepository>;
+  let mockRepo: {
+    findCartById: ReturnType<typeof vi.fn>;
+    findCartByUserId: ReturnType<typeof vi.fn>;
+    findCartByGuestTokenHash: ReturnType<typeof vi.fn>;
+    createCart: ReturnType<typeof vi.fn>;
+    addItem: ReturnType<typeof vi.fn>;
+    updateItemQuantity: ReturnType<typeof vi.fn>;
+    updateItemPriceSnapshot: ReturnType<typeof vi.fn>;
+    removeItem: ReturnType<typeof vi.fn>;
+    clearCart: ReturnType<typeof vi.fn>;
+    deleteCart: ReturnType<typeof vi.fn>;
+    cleanupExpiredGuestCarts: ReturnType<typeof vi.fn>;
+  };
   let service: CartService;
 
   const mockVariant = {
@@ -85,7 +97,7 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
       cleanupExpiredGuestCarts: vi.fn().mockResolvedValue({ count: 5 }),
     };
 
-    service = new CartService(mockRepo as ICartRepository);
+    service = new CartService(mockRepo as unknown as ICartRepository);
   });
 
   describe('Security & Identification', () => {
@@ -112,10 +124,10 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
 
   describe('Add to Cart & Validation', () => {
     it('rejects adding inactive product variant', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValueOnce({
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValueOnce({
         ...mockVariant,
         isActive: false,
-      });
+      } as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>);
 
       await expect(
         service.addItem({
@@ -127,13 +139,13 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
     });
 
     it('rejects adding variant if parent product is inactive', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValueOnce({
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValueOnce({
         ...mockVariant,
         product: {
           ...mockVariant.product,
           status: 'DRAFT',
         },
-      });
+      } as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>);
 
       await expect(
         service.addItem({
@@ -145,10 +157,12 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
     });
 
     it('clamps quantity to available inventory stock for READY_STOCK', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValue(mockVariant);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue(
+        mockVariant as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>,
+      );
       // Available stock = 5
-      (prisma.inventory.findMany as any).mockResolvedValue([
-        { onHand: 10, reserved: 3, damaged: 2 },
+      vi.mocked(prisma.inventory.findMany).mockResolvedValue([
+        { onHand: 10, reserved: 3, damaged: 2 } as unknown as Awaited<ReturnType<typeof prisma.inventory.findMany>>[number],
       ]);
 
       await expect(
@@ -161,8 +175,12 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
     });
 
     it('enforces maximum per-item limit', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValue(mockVariant);
-      (prisma.inventory.findMany as any).mockResolvedValue([{ onHand: 100, reserved: 0, damaged: 0 }]);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue(
+        mockVariant as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>,
+      );
+      vi.mocked(prisma.inventory.findMany).mockResolvedValue([
+        { onHand: 100, reserved: 0, damaged: 0 } as unknown as Awaited<ReturnType<typeof prisma.inventory.findMany>>[number],
+      ]);
 
       await expect(
         service.addItem({
@@ -174,8 +192,12 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
     });
 
     it('successfully adds item using DB price snapshot', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValue(mockVariant);
-      (prisma.inventory.findMany as any).mockResolvedValue([{ onHand: 20, reserved: 0, damaged: 0 }]);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue(
+        mockVariant as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>,
+      );
+      vi.mocked(prisma.inventory.findMany).mockResolvedValue([
+        { onHand: 20, reserved: 0, damaged: 0 } as unknown as Awaited<ReturnType<typeof prisma.inventory.findMany>>[number],
+      ]);
 
       const createdItem: CartItemEntity = {
         id: 'ci-1',
@@ -185,11 +207,11 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
         priceSnapshot: 1200,
         createdAt: new Date(),
         updatedAt: new Date(),
-        variant: mockVariant as any,
+        variant: mockVariant,
       };
 
-      (mockRepo.addItem as any).mockResolvedValueOnce(createdItem);
-      (mockRepo.findCartById as any)
+      mockRepo.addItem.mockResolvedValueOnce(createdItem);
+      mockRepo.findCartById
         .mockResolvedValueOnce(sampleCart)
         .mockResolvedValueOnce({
           ...sampleCart,
@@ -230,7 +252,7 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
             priceSnapshot: 1200,
             createdAt: new Date(),
             updatedAt: new Date(),
-            variant: mockVariant as any,
+            variant: mockVariant,
           },
         ],
       };
@@ -246,16 +268,20 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
             priceSnapshot: 1200,
             createdAt: new Date(),
             updatedAt: new Date(),
-            variant: mockVariant as any,
+            variant: mockVariant,
           },
         ],
       };
 
-      (mockRepo.findCartByGuestTokenHash as any).mockResolvedValueOnce(guestCart);
-      (mockRepo.findCartByUserId as any).mockResolvedValue(userCart);
-      (prisma.productVariant.findUnique as any).mockResolvedValue(mockVariant);
+      mockRepo.findCartByGuestTokenHash.mockResolvedValueOnce(guestCart);
+      mockRepo.findCartByUserId.mockResolvedValue(userCart);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue(
+        mockVariant as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>,
+      );
       // Available stock = 15, but MAX limit is 10
-      (prisma.inventory.findMany as any).mockResolvedValue([{ onHand: 20, reserved: 0, damaged: 5 }]);
+      vi.mocked(prisma.inventory.findMany).mockResolvedValue([
+        { onHand: 20, reserved: 0, damaged: 5 } as unknown as Awaited<ReturnType<typeof prisma.inventory.findMany>>[number],
+      ]);
 
       const result = await service.mergeCart('user-1', 'raw-guest-token');
 
@@ -273,7 +299,7 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
     });
 
     it('returns empty merge result idempotently if guest cart does not exist', async () => {
-      (mockRepo.findCartByGuestTokenHash as any).mockResolvedValueOnce(null);
+      mockRepo.findCartByGuestTokenHash.mockResolvedValueOnce(null);
 
       const result = await service.mergeCart('user-1', 'unknown-token');
       expect(result.itemsCount).toBe(0);
@@ -297,17 +323,19 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
             variant: {
               ...mockVariant,
               price: 1250, // Current price in DB is 1250
-            } as any,
+            },
           },
         ],
       };
 
-      (mockRepo.findCartById as any).mockResolvedValue(cartWithOldPrice);
-      (prisma.productVariant.findUnique as any).mockResolvedValue({
+      mockRepo.findCartById.mockResolvedValue(cartWithOldPrice);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue({
         ...mockVariant,
         price: 1250,
-      });
-      (prisma.inventory.findMany as any).mockResolvedValue([{ onHand: 10, reserved: 0, damaged: 0 }]);
+      } as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>);
+      vi.mocked(prisma.inventory.findMany).mockResolvedValue([
+        { onHand: 10, reserved: 0, damaged: 0 } as unknown as Awaited<ReturnType<typeof prisma.inventory.findMany>>[number],
+      ]);
 
       const validation = await service.validateCart('cart-1');
 
@@ -335,14 +363,18 @@ describe('CartService (Unit Tests with Mocked Repository & DB)', () => {
             priceSnapshot: 1200,
             createdAt: new Date(),
             updatedAt: new Date(),
-            variant: mockVariant as any,
+            variant: mockVariant,
           },
         ],
       };
 
-      (mockRepo.findCartById as any).mockResolvedValue(cartWithOos);
-      (prisma.productVariant.findUnique as any).mockResolvedValue(mockVariant);
-      (prisma.inventory.findMany as any).mockResolvedValue([{ onHand: 0, reserved: 0, damaged: 0 }]);
+      mockRepo.findCartById.mockResolvedValue(cartWithOos);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue(
+        mockVariant as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>,
+      );
+      vi.mocked(prisma.inventory.findMany).mockResolvedValue([
+        { onHand: 0, reserved: 0, damaged: 0 } as unknown as Awaited<ReturnType<typeof prisma.inventory.findMany>>[number],
+      ]);
 
       const validation = await service.validateCart('cart-1');
 

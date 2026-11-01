@@ -5,6 +5,7 @@ import type {
   RecoveryAttemptEntity,
 } from '@/modules/abandoned-checkout/abandoned-checkout.types';
 import type { ICheckoutRepository, CheckoutSessionEntity } from '@/modules/checkout/checkout.types';
+import type { IAuditService } from '@/services/audit.service';
 import { RecoveryService } from '@/modules/abandoned-checkout/abandoned-checkout.recovery';
 import { prisma } from '@/config/database';
 
@@ -17,8 +18,20 @@ vi.mock('@/config/database', () => ({
 }));
 
 describe('AbandonedCheckoutService (Unit Tests)', () => {
-  let mockRepo: Partial<IAbandonedCheckoutRepository>;
-  let mockCheckoutRepo: Partial<ICheckoutRepository>;
+  let mockRepo: {
+    findSessionsToClassify: ReturnType<typeof vi.fn>;
+    findExpiredSessions: ReturnType<typeof vi.fn>;
+    updateSessionStatus: ReturnType<typeof vi.fn>;
+    findFiltered: ReturnType<typeof vi.fn>;
+    findByIdWithTimeline: ReturnType<typeof vi.fn>;
+    getRecoveryAttempts: ReturnType<typeof vi.fn>;
+    createRecoveryAttempt: ReturnType<typeof vi.fn>;
+    getAggregatedStats: ReturnType<typeof vi.fn>;
+  };
+  let mockCheckoutRepo: {
+    findBySessionId: ReturnType<typeof vi.fn>;
+    recordEvent: ReturnType<typeof vi.fn>;
+  };
   let mockAuditSvc: { record: ReturnType<typeof vi.fn> };
   let service: AbandonedCheckoutService;
 
@@ -109,9 +122,9 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
     };
 
     service = new AbandonedCheckoutService(
-      mockRepo as IAbandonedCheckoutRepository,
-      mockCheckoutRepo as ICheckoutRepository,
-      mockAuditSvc as any,
+      mockRepo as unknown as IAbandonedCheckoutRepository,
+      mockCheckoutRepo as unknown as ICheckoutRepository,
+      mockAuditSvc as unknown as IAuditService,
     );
   });
 
@@ -131,7 +144,7 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
     });
 
     it('does not classify recently inactive session (< 30 minutes)', async () => {
-      (mockRepo.findSessionsToClassify as any).mockResolvedValueOnce([]); // Query returned 0 matching sessions
+      mockRepo.findSessionsToClassify.mockResolvedValueOnce([]); // Query returned 0 matching sessions
 
       const res = await service.classifyAbandonedSessions(new Date(), 30);
       expect(mockRepo.updateSessionStatus).not.toHaveBeenCalled();
@@ -143,7 +156,7 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
       await service.classifyAbandonedSessions(new Date(), 30);
 
       // Second run: no active sessions meet criteria
-      (mockRepo.findSessionsToClassify as any).mockResolvedValueOnce([]);
+      mockRepo.findSessionsToClassify.mockResolvedValueOnce([]);
       const secondRun = await service.classifyAbandonedSessions(new Date(), 30);
 
       expect(secondRun.abandonedCount).toBe(0);
@@ -174,12 +187,12 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
   describe('Recovery Dispatch & Privacy Consent Protection', () => {
     it('blocks recovery attempt when explicit customer consent is missing', async () => {
       const recoveryService = new RecoveryService(
-        mockRepo as IAbandonedCheckoutRepository,
-        mockCheckoutRepo as ICheckoutRepository,
+        mockRepo as unknown as IAbandonedCheckoutRepository,
+        mockCheckoutRepo as unknown as ICheckoutRepository,
       );
 
       // Session without consent
-      (mockCheckoutRepo.findBySessionId as any).mockResolvedValueOnce({
+      mockCheckoutRepo.findBySessionId.mockResolvedValueOnce({
         ...sampleSession,
         cartSnapshot: {
           ...sampleSession.cartSnapshot,
@@ -190,7 +203,7 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
         },
       });
 
-      (prisma.consentRecord.findFirst as any).mockResolvedValueOnce(null);
+      vi.mocked(prisma.consentRecord.findFirst).mockResolvedValueOnce(null);
 
       await expect(
         recoveryService.sendRecovery('session_abandoned_1', 'SMS'),
@@ -199,21 +212,21 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
 
     it('blocks recovery if maximum attempts limit (2) is reached', async () => {
       const recoveryService = new RecoveryService(
-        mockRepo as IAbandonedCheckoutRepository,
-        mockCheckoutRepo as ICheckoutRepository,
+        mockRepo as unknown as IAbandonedCheckoutRepository,
+        mockCheckoutRepo as unknown as ICheckoutRepository,
       );
 
-      (prisma.consentRecord.findFirst as any).mockResolvedValueOnce({
+      vi.mocked(prisma.consentRecord.findFirst).mockResolvedValueOnce({
         id: 'consent-1',
         isGranted: true,
-      });
+      } as unknown as Awaited<ReturnType<typeof prisma.consentRecord.findFirst>>);
 
       // 2 prior attempts
       const twoAttempts: RecoveryAttemptEntity[] = [
         { id: '1', checkoutSessionId: 'cs-db-1', channel: 'SMS', status: 'SENT', sentAt: new Date(Date.now() - 5 * 3600000) },
         { id: '2', checkoutSessionId: 'cs-db-1', channel: 'SMS', status: 'SENT', sentAt: new Date(Date.now() - 3 * 3600000) },
       ];
-      (mockRepo.getRecoveryAttempts as any).mockResolvedValueOnce(twoAttempts);
+      mockRepo.getRecoveryAttempts.mockResolvedValueOnce(twoAttempts);
 
       await expect(
         recoveryService.sendRecovery('session_abandoned_1', 'SMS'),
@@ -222,14 +235,14 @@ describe('AbandonedCheckoutService (Unit Tests)', () => {
 
     it('successfully dispatches recovery message when consent is verified', async () => {
       const recoveryService = new RecoveryService(
-        mockRepo as IAbandonedCheckoutRepository,
-        mockCheckoutRepo as ICheckoutRepository,
+        mockRepo as unknown as IAbandonedCheckoutRepository,
+        mockCheckoutRepo as unknown as ICheckoutRepository,
       );
 
-      (prisma.consentRecord.findFirst as any).mockResolvedValueOnce({
+      vi.mocked(prisma.consentRecord.findFirst).mockResolvedValueOnce({
         id: 'consent-1',
         isGranted: true,
-      });
+      } as unknown as Awaited<ReturnType<typeof prisma.consentRecord.findFirst>>);
 
       const res = await recoveryService.sendRecovery('session_abandoned_1', 'SMS');
 

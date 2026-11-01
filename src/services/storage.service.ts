@@ -99,6 +99,7 @@ export function getResponsiveImageUrls(
   if (publicId && env.CLOUDINARY_CLOUD_NAME) {
     const buildVariantUrl = (width: number) => {
       return cloudinary.url(publicId, {
+        cloud_name: env.CLOUDINARY_CLOUD_NAME,
         secure: true,
         transformation: [
           { width, crop: 'limit' },

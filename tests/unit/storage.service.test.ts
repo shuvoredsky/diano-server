@@ -5,6 +5,7 @@ import {
   CloudinaryAdapter,
   validateImageSignature,
 } from '@/services/storage.service';
+import { env } from '@/config/env.config';
 import fs from 'fs/promises';
 
 describe('StorageService & Image Security (Unit Tests)', () => {
@@ -116,15 +117,21 @@ describe('StorageService & Image Security (Unit Tests)', () => {
 
   describe('CloudinaryAdapter without credentials', () => {
     it('should throw an error and never fake success if Cloudinary credentials are missing', async () => {
-      const cloudinaryAdapter = new CloudinaryAdapter();
+      const origSecret = env.CLOUDINARY_API_SECRET;
+      (env as Record<string, unknown>).CLOUDINARY_API_SECRET = '';
+      try {
+        const cloudinaryAdapter = new CloudinaryAdapter();
 
-      await expect(
-        cloudinaryAdapter.upload({
-          buffer: validJpegBuffer,
-          originalname: 'sample.jpg',
-          mimetype: 'image/jpeg',
-        }),
-      ).rejects.toThrow(/Storage service is not configured/);
+        await expect(
+          cloudinaryAdapter.upload({
+            buffer: validJpegBuffer,
+            originalname: 'sample.jpg',
+            mimetype: 'image/jpeg',
+          }),
+        ).rejects.toThrow(/Storage service is not configured/);
+      } finally {
+        (env as Record<string, unknown>).CLOUDINARY_API_SECRET = origSecret;
+      }
     });
   });
 });

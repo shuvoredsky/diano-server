@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WishlistService } from '@/modules/wishlist/wishlist.service';
 import type { IWishlistRepository, WishlistEntity } from '@/modules/wishlist/wishlist.types';
+import type { cartService } from '@/modules/cart/cart.service';
 import { prisma } from '@/config/database';
 
 vi.mock('@/config/database', () => ({
@@ -12,7 +13,14 @@ vi.mock('@/config/database', () => ({
 }));
 
 describe('WishlistService (Unit Tests with Mocked Repository)', () => {
-  let mockRepo: Partial<IWishlistRepository>;
+  let mockRepo: {
+    findWishlistByUserId: ReturnType<typeof vi.fn>;
+    createWishlist: ReturnType<typeof vi.fn>;
+    addItem: ReturnType<typeof vi.fn>;
+    findItem: ReturnType<typeof vi.fn>;
+    removeItem: ReturnType<typeof vi.fn>;
+    clearWishlist: ReturnType<typeof vi.fn>;
+  };
   let mockCartService: {
     getOrCreateCart: ReturnType<typeof vi.fn>;
     addItem: ReturnType<typeof vi.fn>;
@@ -99,7 +107,7 @@ describe('WishlistService (Unit Tests with Mocked Repository)', () => {
       addItem: vi.fn().mockResolvedValue({}),
     };
 
-    service = new WishlistService(mockRepo as IWishlistRepository, mockCartService as any);
+    service = new WishlistService(mockRepo as unknown as IWishlistRepository, mockCartService as unknown as typeof cartService);
   });
 
   describe('Security & DTO Hygiene', () => {
@@ -107,7 +115,7 @@ describe('WishlistService (Unit Tests with Mocked Repository)', () => {
       const res = await service.getWishlist('user-1');
 
       expect(res.wishlist.items[0]).toHaveProperty('price', '1200.00');
-      expect((res.wishlist.items[0] as any).costPrice).toBeUndefined();
+      expect((res.wishlist.items[0] as unknown as Record<string, unknown>).costPrice).toBeUndefined();
       expect(JSON.stringify(res)).not.toContain('600');
       expect(JSON.stringify(res)).not.toContain('costPrice');
     });
@@ -115,10 +123,10 @@ describe('WishlistService (Unit Tests with Mocked Repository)', () => {
 
   describe('Add to Wishlist & Idempotency', () => {
     it('rejects adding inactive or deleted product variant to wishlist', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValueOnce({
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValueOnce({
         ...mockVariant,
         isActive: false,
-      });
+      } as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>);
 
       await expect(
         service.addItem('user-1', { variantId: 'var-1' }),
@@ -126,7 +134,9 @@ describe('WishlistService (Unit Tests with Mocked Repository)', () => {
     });
 
     it('idempotently adds item without throwing duplicate errors', async () => {
-      (prisma.productVariant.findUnique as any).mockResolvedValue(mockVariant);
+      vi.mocked(prisma.productVariant.findUnique).mockResolvedValue(
+        mockVariant as unknown as Awaited<ReturnType<typeof prisma.productVariant.findUnique>>,
+      );
 
       const res = await service.addItem('user-1', { variantId: 'var-1' });
 
@@ -154,7 +164,7 @@ describe('WishlistService (Unit Tests with Mocked Repository)', () => {
     });
 
     it('throws 404 when moving an item not present in wishlist', async () => {
-      (mockRepo.findItem as any).mockResolvedValueOnce(null);
+      mockRepo.findItem.mockResolvedValueOnce(null);
 
       await expect(
         service.moveToCart('user-1', 'non-existent-var'),

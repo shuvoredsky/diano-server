@@ -1,4 +1,5 @@
 import { prisma } from '@/config/database';
+import type { Prisma } from '@prisma/client';
 import { toNumberSafe } from '@/utils/currency.util';
 import type {
   ICheckoutRepository,
@@ -120,7 +121,7 @@ export class CheckoutRepository implements ICheckoutRepository {
         sessionId: data.sessionId,
         userId: data.userId ?? null,
         status: 'ACTIVE',
-        cartSnapshot: data.cartSnapshot as any,
+        cartSnapshot: data.cartSnapshot as unknown as Prisma.InputJsonValue,
         checkoutValue: data.checkoutValue,
         expiresAt: data.expiresAt,
         deviceCategory: data.deviceCategory ?? 'DESKTOP',
@@ -154,7 +155,7 @@ export class CheckoutRepository implements ICheckoutRepository {
       where: { id },
       data: {
         ...(data.status && { status: data.status }),
-        ...(data.cartSnapshot && { cartSnapshot: data.cartSnapshot as any }),
+        ...(data.cartSnapshot && { cartSnapshot: data.cartSnapshot as unknown as Prisma.InputJsonValue }),
         ...(data.checkoutValue !== undefined && { checkoutValue: data.checkoutValue }),
         ...(data.lastCompletedStep !== undefined && { lastCompletedStep: data.lastCompletedStep }),
         ...(data.consentStatus !== undefined && { consentStatus: data.consentStatus }),
@@ -191,7 +192,7 @@ export class CheckoutRepository implements ICheckoutRepository {
       data: {
         checkoutSessionId: data.checkoutSessionId,
         type: data.type,
-        metadata: (data.metadata ?? {}) as any,
+        metadata: (data.metadata ?? {}) as unknown as Prisma.InputJsonValue,
         occurredAt: new Date(),
       },
     });
