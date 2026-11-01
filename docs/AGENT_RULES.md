@@ -8,14 +8,20 @@ This document establishes the binding architectural, operational, and developmen
 - **Workspace Boundary:** Work is strictly confined to `diano-server`. Never search, read, or execute commands outside this directory.
 - **Environment & Secrets:** Never print, log, or inspect values in `.env` or any secret files. Verify with `git status` before every commit that no `.env` or sensitive artifact is staged.
 
-### 2. No-DB Mode
-- **No Live DB/Redis:** PostgreSQL (Neon) and Redis are not running. Never attempt to connect, migrate, or seed databases.
-- **Testing Standard:** 
-  - Service and business logic must use repository mocking for unit tests.
-  - Integration tests requiring real PostgreSQL must be guarded by `describe.skipIf(!process.env.TEST_DATABASE_URL)`.
-  - Safety check: If `TEST_DATABASE_URL === DATABASE_URL`, tests must refuse execution.
-  - Test reporting: Explicitly state `"X unit passed, Y integration SKIPPED"`. Never report skipped tests as passed.
-  - Track pending live database tests in `PROJECT_PROGRESS.md` under "DB verification pending".
+### 2. Database Modes & DB Mode Rules (Active: DB Mode)
+- **Active State:** Real Neon PostgreSQL is connected and active.
+- **Schema Migrations:**
+  - When Prisma schema changes: Run `npx prisma migrate dev --name <name>` against `DATABASE_URL`.
+  - Next, apply to test database: `npx prisma migrate deploy` with `TEST_DATABASE_URL`.
+  - Commit all generated migration files to Git.
+  - NEVER execute destructive commands (`migrate reset`, `drop`, `truncate`) on `DATABASE_URL`. Destructive actions are strictly restricted to `TEST_DATABASE_URL`.
+- **Testing Standard:**
+  - New features require both Unit Tests (with repository mocking) and Integration Tests (against real `TEST_DATABASE_URL`).
+  - During development, run ONLY the relevant test file(s) to save round-trip time. Run the full test suite only at the end of each Part/Milestone.
+  - Test data belongs strictly in `TEST_DATABASE_URL`.
+  - Targeted cleanup only: Never run global `deleteMany()` on tables with foreign keys linked to immutable ledgers (`StockMovement` append-only trigger).
+- **Environment & Secrets:** Never print, log, or inspect `.env` values or database connection strings.
+- **Reuse First:** Always reuse existing StorageAdapter, HTML sanitizer, auditService, pagination utilities, ApiResponse, date/currency utilities, and test-auth-helper. Never duplicate logic.
 
 ### 3. Layered Architecture
 - **Flow:** `Route -> Middleware -> Controller -> Service -> Repository (Interface) -> Database/ORM`.
