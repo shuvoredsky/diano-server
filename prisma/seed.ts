@@ -10,7 +10,7 @@ dotenv.config();
 // Initialize DB client using PrismaPg adapter (Prisma 7 requirement)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  connectionTimeoutMillis: 3000,
+  connectionTimeoutMillis: 10000,
 });
 
 const adapter = new PrismaPg(pool);
