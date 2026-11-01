@@ -45,8 +45,10 @@ export const permissionsData = [
 
   // Inventory & Warehouse
   { resource: 'inventory', action: 'read', name: 'Read Inventory', slug: 'inventory:read', description: 'View stock levels' },
+  { resource: 'inventory', action: 'manage', name: 'Manage Inventory', slug: 'inventory:manage', description: 'Perform stock mutations (receive, adjust, damage, transfer)' },
   { resource: 'inventory', action: 'adjust', name: 'Adjust Stock', slug: 'inventory:adjust', description: 'Record manual stock adjustments' },
   { resource: 'inventory', action: 'audit', name: 'Audit Stock', slug: 'inventory:audit', description: 'Initiate and complete stock audits' },
+  { resource: 'inventory', action: 'view_cost', name: 'View Cost & Stock Value', slug: 'inventory:view_cost', description: 'View confidential costPrice and total inventory valuation' },
   { resource: 'warehouse', action: 'manage', name: 'Manage Warehouses', slug: 'warehouse:manage', description: 'Manage warehouse facilities' },
   { resource: 'supplier', action: 'manage', name: 'Manage Suppliers', slug: 'supplier:manage', description: 'Manage suppliers and purchase orders' },
 

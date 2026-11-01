@@ -7,6 +7,7 @@ import { permissionsRouter } from '@/modules/permissions/permissions.routes';
 import { customersRouter } from '@/modules/customers/customers.routes';
 import { categoriesRouter } from '@/modules/categories/categories.routes';
 import { productsRouter } from '@/modules/products/products.routes';
+import { inventoryRouter } from '@/modules/inventory/inventory.routes';
 
 const rootRouter = Router();
 
@@ -31,6 +32,9 @@ rootRouter.use('/categories', categoriesRouter);
 
 // Products & Variants (Catalog)
 rootRouter.use('/products', productsRouter);
+
+// Inventory & Warehouse Management (Admin)
+rootRouter.use('/inventory', inventoryRouter);
 
 export { rootRouter };
 

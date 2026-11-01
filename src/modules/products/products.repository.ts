@@ -422,10 +422,23 @@ export class PrismaProductsRepository implements IProductsRepository {
   }
 
   /**
-   * Pending live inventory/order modules:
-   * Will query Inventory levels and OrderItems in M6+
+   * Real inventory check (M6):
+   * Variant cannot be soft-deleted if active physical or reserved stock exists in any warehouse.
+   * Note: Orders module check interface is preserved (pending Orders in M8).
    */
-  async hasStockOrOrders(_variantId: string): Promise<boolean> {
+  async hasStockOrOrders(variantId: string): Promise<boolean> {
+    const stockCount = await prisma.inventory.count({
+      where: {
+        variantId,
+        OR: [{ onHand: { gt: 0 } }, { reserved: { gt: 0 } }],
+      },
+    });
+
+    if (stockCount > 0) {
+      return true;
+    }
+
+    // Pending Orders module (M8): OrderItem check will evaluate active unfulfilled orders
     return false;
   }
 

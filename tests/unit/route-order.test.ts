@@ -3,6 +3,7 @@ import request from 'supertest';
 import { app } from '@/app';
 import { categoriesService } from '@/modules/categories/categories.service';
 import { productsService } from '@/modules/products/products.service';
+import { inventoryService } from '@/modules/inventory/inventory.service';
 import { generateAccessToken } from '@/utils/jwt.util';
 import { authRepository } from '@/modules/auth/auth.repository';
 import { permissionsCache } from '@/modules/permissions/permissions.cache';
@@ -104,5 +105,68 @@ describe('Route Order Verification (Supertest)', () => {
       expect.objectContaining({ userId: 'test-super-admin' }),
     );
     expect(updateImageSpy).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/v1/inventory/summary should route to getSummary and NOT match /variant/:variantId', async () => {
+    const summarySpy = vi
+      .spyOn(inventoryService, 'getSummary')
+      .mockResolvedValue({
+        totalProducts: 10,
+        totalStockUnits: 50,
+        available: 40,
+        reserved: 5,
+        damaged: 5,
+      });
+
+    const variantSpy = vi
+      .spyOn(inventoryService, 'getInventoryByVariant')
+      .mockResolvedValue([]);
+
+    const response = await request(app)
+      .get('/api/v1/inventory/summary')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toContain('summary metrics retrieved successfully');
+    expect(summarySpy).toHaveBeenCalledTimes(1);
+    expect(variantSpy).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/v1/inventory/movements should route to listMovements and NOT match /variant/:variantId', async () => {
+    const movementsSpy = vi
+      .spyOn(inventoryService, 'listMovements')
+      .mockResolvedValue({ items: [], total: 0 });
+
+    const variantSpy = vi
+      .spyOn(inventoryService, 'getInventoryByVariant')
+      .mockResolvedValue([]);
+
+    const response = await request(app)
+      .get('/api/v1/inventory/movements')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toContain('movements retrieved successfully');
+    expect(movementsSpy).toHaveBeenCalledTimes(1);
+    expect(variantSpy).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/v1/inventory/low-stock should route to listLowStock and NOT match /variant/:variantId', async () => {
+    const lowStockSpy = vi
+      .spyOn(inventoryService, 'listLowStock')
+      .mockResolvedValue({ items: [], total: 0 });
+
+    const variantSpy = vi
+      .spyOn(inventoryService, 'getInventoryByVariant')
+      .mockResolvedValue([]);
+
+    const response = await request(app)
+      .get('/api/v1/inventory/low-stock')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toContain('Low stock variants retrieved successfully');
+    expect(lowStockSpy).toHaveBeenCalledTimes(1);
+    expect(variantSpy).not.toHaveBeenCalled();
   });
 });
