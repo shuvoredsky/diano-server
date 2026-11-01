@@ -23,9 +23,38 @@
 | **M6: Inventory, Stock Ledger, Suppliers, Purchase Orders** | Multi-warehouse stock tracking, conditional atomic reservations, immutable StockMovement ledger, deadlock-free transfers, suppliers CRUD, purchase orders lifecycle & partial receiving, weighted average costing, stock audits & variance reconciliation | ✅ Completed | DB verified (inventory integration tests & deadlock tests passing) |
 | **M7: Cart & Wishlist** | Guest cart with 32-byte opaque token (SHA-256 hashed in DB), logged-in cart, server pricing from variant.price, active catalog enforcement, stock clamping (onHand - reserved - damaged), pre-order rules, merge sum & clamp, validate issues (PRICE_CHANGED, OUT_OF_STOCK, INSUFFICIENT_STOCK, UNAVAILABLE), 30-day guest cart cleanup hook, customer wishlist with idempotent addition, move-to-cart, zero-leak DTOs | ✅ Completed | DB verified (cart-wishlist integration tests passing) |
 | **M8: Checkout & Abandoned Checkout** | Server-side cart snapshot, 128-bit unguessable sessionId, IDOR protection (guest secret token hash, user ownership), 30m sliding expiry, BD phone validation, dynamic shipping fee calculation from ShippingZone/ShippingMethod (Inside 60 / Outside 120), CouponCalculator interface, strict telemetry allowlist (strictly NO PII), 90-day PII purge, auto-classification (30m boundary), RecoveryService with explicit ConsentRecord guard, NoopAdapter, max 2 attempts & cooldown, admin stats via SQL aggregation, audited customer PII viewing | ✅ Completed | DB verified (checkout-abandoned integration tests passing) |
-| **M9: Orders & State Machine** | Order placement, state machine transitions, payments integration | ⏳ Queued Next | Awaiting user instruction |
+| **M9: Orders, State Machine & Invoicing** | Atomic checkout session conversion, Idempotency-Key duplicate/race handling, server-side pricing recalculation, double-entry stock reservation ledger, collision-safe Dhaka order numbering (DN-YYMMDD-XXXXX), pure state machine with discrete transition permissions, customer cancellation guard, streaming PDF invoices with frozen snapshots and bundled Bengali font, real-order check in hasStockOrOrders | ✅ Completed | DB verified (16/16 unit + 8/8 real Neon DB integration tests passing) |
+| **Site Settings & CMS** | Typed Zod configuration groups (store_profile, invoice, seo_defaults, contact), magic-byte logo/favicon uploads, safe public site-config with ETag/cache, visual banners with Dhaka scheduling window and URL safety, CMS pages with Zod discriminated union blocks JSON (AI landing page ready), immutable PageRevision ledger | ✅ Completed | DB verified (14/14 unit + 3/3 real Neon DB integration tests passing) |
+| **M10: Payment Gateways (SSLCOMMERZ / bKash / Nagad)** | Gateway integrations, webhook IPN signature verification, payment verification | ⏳ Queued Next | Awaiting user instruction |
 
 ---
+
+## Milestone M9: Orders, State Machine & Invoicing (Completed)
+- **Status:** Completed (DB Mode Verified on Neon PostgreSQL)
+- **Key Modules & Implementations:**
+  1. **Atomic Order Placement Engine (`src/modules/orders`):**
+     - **Session Locking & Idempotency:** Atomic PostgreSQL transaction with `Idempotency-Key` verification before session conversion. Identical payload replay returns existing order (`200 OK`); divergent payload with same key returns `409 Conflict`.
+     - **Server Recomputation:** Variant prices re-queried directly from database; shipping charge calculated via `ShippingCalculator`; coupon discounts applied via `CouponCalculator`; taxes computed. Client-provided totals are strictly ignored.
+     - **Stock Ledger Integration:** Physical inventory reserved atomically (`referenceType: 'ORDER'`) using `inventoryService.reserveStock(..., tx)`. Failure triggers complete transaction rollback.
+     - **Collision-Safe Dhaka Order Numbering:** Deterministic `AppSequence` counter generating human-friendly numbers formatted as `DN-YYMMDD-XXXXX` according to Asia/Dhaka (+06:00) business time.
+     - **Immutable Snapshots:** `OrderItem` captures snapshot of product name, variant title, SKU, cost price, and unit price. Customer, shipping address, and billing address frozen into immutable JSON snapshots.
+  2. **Pure State Machine (`orders.state-machine.ts`):**
+     - Forward fulfillment flow: `PENDING -> CONFIRMED -> PROCESSING -> PACKED -> SHIPPED -> DELIVERED`.
+     - Pre-fulfillment cancellation: `PENDING / CONFIRMED / PROCESSING / PACKED -> CANCELLED` releases reserved stock back to active inventory with double-entry `RELEASE` movement ledger entry.
+     - Post-fulfillment returns: `DELIVERED -> RETURNED -> REFUNDED`.
+     - Customer cancellation restricted to own `PENDING` orders.
+     - Status updates emit immutable `OrderStatusHistory` entries and `AuditLog` records.
+  3. **PDFKit Invoice Generation & Freezing (`invoice.service.ts`):**
+     - **Frozen Snapshot:** `OrderInvoiceSnapshot` (`INV-YYMM-XXXXX`) freezes active store branding, invoice notes, and customer data at creation time. Historical invoices remain legally constant even if store settings change later.
+     - **Unicode Bengali Typography:** Bundled SIL OFL font `HindSiliguri-Regular.ttf` in `assets/fonts/` for proper Bengali script rendering in PDFKit.
+     - **SSRF-Safe Logo Fetching:** Cloudinary logo fetch strictly restricted to allowlisted host `res.cloudinary.com` with a 4000ms timeout and 2MB size limit. Network failures degrade gracefully to clean typographic header without crashing.
+     - **Streaming Output:** Streams `application/pdf` with `no-store` cache headers.
+  4. **Public & Admin Order Management:**
+     - `POST /orders/track`: Public phone + order number tracking with rate limiting and generic error responses (zero PII enumeration).
+     - Customer: `GET /orders`, `GET /orders/:id` (IDOR verified), `POST /orders/:id/cancel`.
+     - Admin: `GET /admin/orders` (filtering, search, pagination), `GET /admin/orders/:id`, `PATCH /admin/orders/:id/status`, `POST /admin/orders/:id/notes`, `GET /admin/orders/:id/timeline`. Cost prices masked unless operator has `order:view_cost` permission.
+  5. **Real Catalog Deletion Guard:**
+     - Replaced `hasStockOrOrders` placeholder in `products.repository.ts` with real `orderItem.count` check, permanently blocking deletion of variants associated with historical orders.
 
 ## Milestone M8: Checkout & Abandoned Checkout (Completed)
 - **Status:** Completed (No-DB Mode)

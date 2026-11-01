@@ -59,11 +59,13 @@ The DIANO database is structured as a high-integrity relational model designed f
 - **`CheckoutEvent`**: Granular behavioral funnel analytics tracking steps completed (contains strictly non-PII metadata).
 - **`RecoveryAttempt`**: Multi-channel outreach records (SMS, Email) linked to customer consent.
 
-### G. Orders & Fulfillment (4 Models)
+### G. Orders & Fulfillment (6 Models)
 - **`Order`**: Master transaction order entity with status lifecycle, idempotency key, financial totals, and immutable customer/address snapshots. **Never deleted**.
 - **`OrderItem`**: **Immutable snapshot** storing product name, variant title, SKU, cost price, and unit price captured at checkout. Protects historical financials from catalog edits.
 - **`OrderStatusHistory`**: Chronological audit trail of all order transitions.
 - **`OrderNote`**: Internal operational notes and customer-facing updates.
+- **`OrderInvoiceSnapshot`**: **1-to-1 immutable invoice snapshot** (`INV-YYMM-XXXXX`) frozen at order creation/confirmation. Captures store profile, logo reference, customer details, and invoice footer/terms notes so historical invoices remain legally pristine even if site settings or brand profiles change later.
+- **`AppSequence`**: High-concurrency atomic counter sequence table (`DN-YYMMDD-XXXXX` for orders in Asia/Dhaka date, and `INV-YYMM-XXXXX` for invoices) preventing collisions and race conditions.
 
 ### H. Payments & Gateway Events (3 Models)
 - **`Payment`**: Financial transaction record supporting SSLCOMMERZ, bKash, Nagad, and Cash-on-Delivery (COD). Unique constraint on `[provider, transactionId]`.
@@ -100,9 +102,16 @@ The DIANO database is structured as a high-integrity relational model designed f
 - **`Notification`**: Outbox for Email, SMS, In-App, and Push with unique `dedupeKey` to prevent spamming.
 - **`NotificationPreference`**: Opt-in/opt-out toggles per user.
 - **`AuditLog`**: **Immutable append-only system ledger** recording all privileged actions (actor, IP, user-agent, target).
-- **`Setting`**: Key-value system configurations.
+- **`Setting`**: Key-value system configurations with typed Zod schemas (`store_profile`, `invoice`, `seo_defaults`, `contact`).
 - **`AnalyticsDailySummary`**: Pre-computed daily aggregate rollups (GMV, orders, conversion).
 - **`ProductView`**: Product engagement tracking for analytics.
+
+### O. CMS, Banners & Pages (3 Models)
+- **`Banner`**: Visual marketing banners supporting 5 placements (`HOME_HERO`, `HOME_SECONDARY`, `CATEGORY_TOP`, `ANNOUNCEMENT_BAR`, `POPUP`), desktop and mobile image URLs, title, subtitle, CTA, scheduling window (`startsAt`/`endsAt` in Asia/Dhaka), and sort ordering. Validates relative paths and HTTPS-only URLs (blocks `javascript:` and `data:` schemes).
+- **`Page`**: Content and policy pages (`privacy-policy`, `terms`, `return-policy`, `shipping-policy`, `about`, `faq`, `custom`). System policy pages have delete locks.
+  - **Blocks JSON Architecture (Phase 2 AI Ready):** Page content is stored as an array of typed blocks validated via a Zod discriminated union (`heading`, `richText`, `image`, `list`, `faq`, `cta`, `banner-ref`).
+  - *Phase 2 AI Landing Page Note:* The block structure is purposely decoupled from presentation. In Phase 2, the AI landing page generator produces validated JSON matching this discriminated union schema, allowing instant preview, versioned revisions, and publishing with zero database schema migrations.
+- **`PageRevision`**: **Append-only revision snapshot ledger**. Every publish action captures a complete JSON snapshot of page blocks, SEO metadata, actor context, and publication timestamp. Supports one-click rollback/restore.
 
 ---
 
