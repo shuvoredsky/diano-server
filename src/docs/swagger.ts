@@ -1755,6 +1755,210 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Published page content' }, 404: { description: 'Page not found or draft' } },
       },
     },
+    // ==========================================
+    // M9: Orders & Invoice
+    // ==========================================
+    '/api/v1/orders': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Customer: Place order from checkout session (Idempotency-Key required)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['checkoutSessionId'],
+                properties: {
+                  checkoutSessionId: { type: 'string' },
+                  guestSecretToken: { type: 'string' },
+                  customerNotes: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Order created successfully' },
+          200: { description: 'Idempotent replay returning existing order' },
+          409: { description: 'Idempotency key reused with different payload' },
+        },
+      },
+      get: {
+        tags: ['Orders'],
+        summary: 'Customer: List own orders (paginated)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Customer orders list' } },
+      },
+    },
+    '/api/v1/orders/track': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Public: Track order by orderNumber and phone (Rate limited, minimal data)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['orderNumber', 'phone'],
+                properties: {
+                  orderNumber: { type: 'string' },
+                  phone: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Order tracking info' },
+          404: { description: 'No matching order found' },
+        },
+      },
+    },
+    '/api/v1/orders/{id}': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Customer: Get own order details (IDOR protected)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Order details' }, 403: { description: 'Access denied' } },
+      },
+    },
+    '/api/v1/orders/{id}/cancel': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Customer: Cancel own PENDING Cash on Delivery order',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  reason: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Order cancelled and stock released' } },
+      },
+    },
+    '/api/v1/orders/{id}/invoice': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Customer: Stream PDF invoice for own order',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'PDF stream', content: { 'application/pdf': {} } } },
+      },
+    },
+    '/api/v1/admin/orders': {
+      get: {
+        tags: ['Admin Orders'],
+        summary: 'Admin: Search, filter, and paginate orders',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'paymentStatus', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Filtered orders list' } },
+      },
+    },
+    '/api/v1/admin/orders/{id}': {
+      get: {
+        tags: ['Admin Orders'],
+        summary: 'Admin: Get complete order details (masked costPrice unless order:view_cost)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Order details' } },
+      },
+    },
+    '/api/v1/admin/orders/{id}/status': {
+      patch: {
+        tags: ['Admin Orders'],
+        summary: 'Admin: Transition order status machine (atomic side effects)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: {
+                    type: 'string',
+                    enum: ['CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'],
+                  },
+                  note: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Order status updated' },
+          409: { description: 'Invalid status transition' },
+        },
+      },
+    },
+    '/api/v1/admin/orders/{id}/notes': {
+      post: {
+        tags: ['Admin Orders'],
+        summary: 'Admin: Add internal or customer note',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['note'],
+                properties: {
+                  note: { type: 'string' },
+                  isCustomerVisible: { type: 'boolean', default: false },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Note added' } },
+      },
+    },
+    '/api/v1/admin/orders/{id}/timeline': {
+      get: {
+        tags: ['Admin Orders'],
+        summary: 'Admin: Get chronological status history audit trail',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Order status timeline' } },
+      },
+    },
+    '/api/v1/admin/orders/{id}/invoice': {
+      get: {
+        tags: ['Admin Orders'],
+        summary: 'Admin: Stream PDF invoice',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'PDF stream', content: { 'application/pdf': {} } } },
+      },
+    },
   },
 };
 

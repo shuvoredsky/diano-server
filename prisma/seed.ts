@@ -109,6 +109,7 @@ export const permissionsData = [
   // Order Extensions
   { resource: 'order', action: 'confirm', name: 'Confirm Orders', slug: 'order:confirm', description: 'Confirm pending customer orders' },
   { resource: 'order', action: 'ship', name: 'Ship Orders', slug: 'order:ship', description: 'Mark orders as shipped and dispatch' },
+  { resource: 'order', action: 'manage', name: 'Manage Orders', slug: 'order:manage', description: 'Full operational management over orders' },
   { resource: 'order', action: 'view_cost', name: 'View Order Costs & Margins', slug: 'order:view_cost', description: 'View confidential costPrice and gross margins on orders' },
 ];
 
@@ -212,6 +213,7 @@ export async function seedDatabase() {
       'inventory:read',
       'inventory:manage',
       'order:read',
+      'order:manage',
       'order:update_status',
       'order:confirm',
       'order:ship',

@@ -20,6 +20,7 @@ import { siteSettingsRouter } from '@/modules/site-settings/site-settings.routes
 import { siteSettingsController } from '@/modules/site-settings/site-settings.controller';
 import { bannersRouter, publicBannersRouter } from '@/modules/banners/banners.routes';
 import { pagesRouter, publicPagesRouter } from '@/modules/pages/pages.routes';
+import { ordersRouter, adminOrdersRouter } from '@/modules/orders/orders.routes';
 
 const rootRouter = Router();
 
@@ -71,6 +72,10 @@ rootRouter.use('/public/banners', publicBannersRouter);
 // CMS Pages (Admin & Public)
 rootRouter.use('/pages', pagesRouter);
 rootRouter.use('/public/pages', publicPagesRouter);
+
+// Orders & Invoicing (Customer & Admin)
+rootRouter.use('/admin/orders', adminOrdersRouter);
+rootRouter.use('/orders', ordersRouter);
 
 export { rootRouter };
 
