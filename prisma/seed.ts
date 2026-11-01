@@ -507,6 +507,8 @@ export async function seedDatabase() {
   } else {
     // eslint-disable-next-line no-console
     console.info('ℹ️ SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set. Skipping dev super admin creation.');
+  }
+
   // 8. Seed Default Settings
   // eslint-disable-next-line no-console
   console.info('Seeding default store settings...');

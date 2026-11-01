@@ -105,18 +105,30 @@ npm run storage:check
 
 ---
 
-## 🔌 Connecting PostgreSQL & Redis Later
+## 🔌 Database Configuration & Neon Migrations
+ 
+### Connection Modes: Pooled vs. Direct
+Neon PostgreSQL provides two distinct connection URLs:
+1. **`DATABASE_URL` (Pooled):** Contains `-pooler` in the host (e.g. `ep-xyz-pooler.eastus2.azure.neon.tech`). Connects via PgBouncer transaction mode. **Used at application runtime** by Express to handle high-concurrency requests without exhausting connection limits.
+2. **`DIRECT_URL` (Unpooled):** Direct connection to the compute endpoint without `-pooler`. **Used by Prisma CLI for migrations and schema introspection**.
 
-When Docker Desktop or local services are available, start them with:
-```bash
-docker compose -f docker-compose.dev.yml up -d
-```
-Update `.env` with your credentials:
+### Why Prisma Migrate Requires a Direct Connection (Shadow DB)
+During `npx prisma migrate dev`, Prisma automatically spins up a temporary **Shadow Database** to detect schema drift and validate new migrations.
+Because PgBouncer in transaction mode does not support session-level PostgreSQL operations (`CREATE DATABASE`, advisory locks, session variables), running migrations against a pooled connection will fail or hang.
+
+To handle this cleanly:
+- **Approach 1 (Recommended):** Set `DIRECT_URL` in `.env` pointing to your Neon unpooled connection. `prisma.config.ts` automatically uses `DIRECT_URL` for migration commands.
+- **Approach 2 (Automatic Fallback):** If `DIRECT_URL` is omitted, `prisma.config.ts` automatically strips `-pooler` from `DATABASE_URL` to derive the direct compute endpoint.
+- **Approach 3 (Dedicated Shadow DB):** If using a cloud provider with restricted database creation privileges, configure a separate existing database URL in `SHADOW_DATABASE_URL`.
+
 ```env
-DATABASE_URL="postgresql://diano:diano_dev_password@localhost:5432/diano_dev?schema=public"
-REDIS_URL="redis://localhost:6379"
+# Runtime pooled connection (PgBouncer)
+DATABASE_URL="postgresql://user:pass@ep-xyz-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
+
+# Direct unpooled connection for Prisma migrations & DDL
+DIRECT_URL="postgresql://user:pass@ep-xyz.eastus2.azure.neon.tech/neondb?sslmode=require"
+
+# Dedicated test database for integration testing (never main DB)
+TEST_DATABASE_URL="postgresql://user:pass@ep-test-pooler.eastus2.azure.neon.tech/neondb_test?sslmode=require"
 ```
-Then run Prisma migrations:
-```bash
-npx prisma migrate dev
-```
+

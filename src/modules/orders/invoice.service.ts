@@ -10,7 +10,7 @@ import type { OrderEntity } from './orders.types';
 import { toMoneyString } from '@/utils/currency.util';
 
 export const ALLOWED_LOGO_HOSTS = ['res.cloudinary.com'];
-const BENGALI_FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansBengali-Regular.ttf');
+const BENGALI_FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'HindSiliguri-Regular.ttf');
 
 export async function fetchLogoBufferSafe(logoUrl?: string | null): Promise<Buffer | null> {
   if (!logoUrl || typeof logoUrl !== 'string') return null;
