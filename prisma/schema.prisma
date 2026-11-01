@@ -69,6 +69,26 @@ enum PaymentProvider {
   COD
 }
 
+enum BannerPlacement {
+  HOME_HERO
+  HOME_SECONDARY
+  CATEGORY_TOP
+  ANNOUNCEMENT_BAR
+  POPUP
+}
+
+enum PageType {
+  POLICY
+  ABOUT
+  FAQ
+  CUSTOM
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+}
+
 enum RefundStatus {
   PENDING
   APPROVED
@@ -253,6 +273,7 @@ model User {
   notifications          Notification[]
   couponUsages           CouponUsage[]
   returnRequests         ReturnRequest[]
+  pageRevisions          PageRevision[]
   productViews           ProductView[]
   emailTokens            EmailVerificationToken[]
   passwordResetTokens    PasswordResetToken[]
@@ -976,6 +997,7 @@ model Order {
   shipment        Shipment?
   fraudAssessment FraudAssessment?
   returnRequests  ReturnRequest[]
+  invoiceSnapshot OrderInvoiceSnapshot?
 
   @@index([customerId])
   @@index([status])
@@ -1481,6 +1503,96 @@ model Setting {
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+}
+
+// ==============================================================================
+// CMS: BANNERS & PAGES
+// ==============================================================================
+
+model Banner {
+  id           String          @id @default(cuid())
+  placement    BannerPlacement
+  title        String
+  subtitle     String?
+  desktopImage String
+  mobileImage  String?
+  altText      String?
+  linkUrl      String?
+  ctaText      String?
+  startsAt     DateTime?
+  endsAt       DateTime?
+  isActive     Boolean         @default(true)
+  sortOrder    Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([placement, isActive])
+  @@index([startsAt, endsAt])
+  @@index([sortOrder])
+}
+
+model Page {
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  type            PageType       @default(CUSTOM)
+  title           String
+  content         Json           @default("[]")
+  metaTitle       String?
+  metaDescription String?
+  ogImage         String?
+  status          PageStatus     @default(DRAFT)
+  publishedAt     DateTime?
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  revisions PageRevision[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([type])
+}
+
+model PageRevision {
+  id          String   @id @default(cuid())
+  pageId      String
+  version     Int
+  title       String
+  content     Json
+  publishedAt DateTime @default(now())
+  authorId    String?
+  createdAt   DateTime @default(now())
+
+  page   Page  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([pageId, version])
+  @@index([pageId])
+}
+
+// ==============================================================================
+// INVOICE SNAPSHOTS
+// ==============================================================================
+
+model OrderInvoiceSnapshot {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  invoiceNumber   String   @unique
+  storeProfile    Json
+  invoiceSettings Json
+  issuedAt        DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceNumber])
+  @@index([orderId])
+}
+
+model AppSequence {
+  key       String   @id
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
 }
 
 model AnalyticsDailySummary {

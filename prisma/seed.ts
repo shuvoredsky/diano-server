@@ -94,12 +94,22 @@ export const permissionsData = [
   // Analytics & Audits
   { resource: 'analytics', action: 'view', name: 'View Analytics', slug: 'analytics:view', description: 'View sales and revenue metrics' },
   { resource: 'audit', action: 'view', name: 'View Audit Logs', slug: 'audit:view', description: 'Inspect system and security audit logs' },
+  { resource: 'settings', action: 'read', name: 'Read Settings', slug: 'settings:read', description: 'View system and store configuration' },
   { resource: 'settings', action: 'update', name: 'Update Settings', slug: 'settings:update', description: 'Modify global store settings' },
+
+  // CMS
+  { resource: 'banner', action: 'manage', name: 'Manage Banners', slug: 'banner:manage', description: 'Create, update, reorder and delete promotional banners' },
+  { resource: 'page', action: 'manage', name: 'Manage Pages', slug: 'page:manage', description: 'Create, update, publish and restore CMS pages' },
 
   // Checkout & Abandoned Checkout
   { resource: 'checkout', action: 'read', name: 'Read Checkout', slug: 'checkout:read', description: 'View checkout sessions' },
   { resource: 'abandoned_checkout', action: 'read', name: 'Read Abandoned Checkouts', slug: 'abandoned_checkout:read', description: 'View abandoned checkout metrics and sessions' },
   { resource: 'abandoned_checkout', action: 'manage', name: 'Manage Abandoned Checkouts', slug: 'abandoned_checkout:manage', description: 'Trigger recovery actions and manage sessions' },
+
+  // Order Extensions
+  { resource: 'order', action: 'confirm', name: 'Confirm Orders', slug: 'order:confirm', description: 'Confirm pending customer orders' },
+  { resource: 'order', action: 'ship', name: 'Ship Orders', slug: 'order:ship', description: 'Mark orders as shipped and dispatch' },
+  { resource: 'order', action: 'view_cost', name: 'View Order Costs & Margins', slug: 'order:view_cost', description: 'View confidential costPrice and gross margins on orders' },
 ];
 
 export const rolesData = SYSTEM_ROLES;
@@ -171,6 +181,67 @@ export async function seedDatabase() {
           permissionId: permId,
         },
       });
+    }
+  }
+
+  const adminRoleId = roleMap.get('admin');
+  if (adminRoleId) {
+    for (const permId of permissionMap.values()) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: adminRoleId,
+            permissionId: permId,
+          },
+        },
+        update: {},
+        create: {
+          roleId: adminRoleId,
+          permissionId: permId,
+        },
+      });
+    }
+  }
+
+  const managerRoleId = roleMap.get('manager');
+  if (managerRoleId) {
+    const managerAllowedPrefixes = [
+      'product:read',
+      'product:update',
+      'category:read',
+      'inventory:read',
+      'inventory:manage',
+      'order:read',
+      'order:update_status',
+      'order:confirm',
+      'order:ship',
+      'order:cancel',
+      'shipping:read',
+      'coupon:read',
+      'coupon:manage',
+      'review:read',
+      'review:moderate',
+      'analytics:view',
+      'settings:read',
+      'banner:manage',
+      'page:manage',
+    ];
+    for (const [slug, permId] of permissionMap.entries()) {
+      if (managerAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
+        await prisma.rolePermission.upsert({
+          where: {
+            roleId_permissionId: {
+              roleId: managerRoleId,
+              permissionId: permId,
+            },
+          },
+          update: {},
+          create: {
+            roleId: managerRoleId,
+            permissionId: permId,
+          },
+        });
+      }
     }
   }
 
@@ -434,6 +505,100 @@ export async function seedDatabase() {
   } else {
     // eslint-disable-next-line no-console
     console.info('ℹ️ SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set. Skipping dev super admin creation.');
+  // 8. Seed Default Settings
+  // eslint-disable-next-line no-console
+  console.info('Seeding default store settings...');
+  const defaultSettings = [
+    {
+      key: 'store_profile',
+      isPublic: true,
+      description: 'Public store profile information',
+      value: {
+        storeName: 'Diano Fashion',
+        tagline: 'Premium Minimalist Fashion',
+        phone: '+8801700000000',
+        email: 'support@diano.com.bd',
+        address: 'Tejgaon Industrial Area, Dhaka 1208, Bangladesh',
+        socialLinks: {
+          facebook: 'https://facebook.com/dianofashion',
+          instagram: 'https://instagram.com/dianofashion',
+        },
+      },
+    },
+    {
+      key: 'invoice',
+      isPublic: false,
+      description: 'Order invoice settings',
+      value: {
+        prefix: 'INV',
+        footerNote: 'Thank you for shopping with Diano.',
+        termsNote: 'Please keep this invoice for returns within 7 days.',
+        showLogo: true,
+        signatureText: 'Authorized Signatory',
+      },
+    },
+    {
+      key: 'seo_defaults',
+      isPublic: true,
+      description: 'Default SEO metadata',
+      value: {
+        titleTemplate: '%s | Diano Fashion',
+        description: 'Curated premium fashion, apparel and lifestyle essentials in Bangladesh.',
+      },
+    },
+    {
+      key: 'contact',
+      isPublic: true,
+      description: 'Support and contact details',
+      value: {
+        supportPhone: '+8801700000000',
+        supportEmail: 'support@diano.com.bd',
+        address: 'Tejgaon Industrial Area, Dhaka 1208, Bangladesh',
+        supportHours: 'Saturday - Thursday: 10:00 AM - 8:00 PM (Dhaka Time)',
+      },
+    },
+  ];
+
+  for (const s of defaultSettings) {
+    await prisma.setting.upsert({
+      where: { key: s.key },
+      update: {},
+      create: {
+        key: s.key,
+        value: s.value,
+        isPublic: s.isPublic,
+        description: s.description,
+      },
+    });
+  }
+
+  // 9. Seed Default System Pages (Draft placeholders, no dummy legal text)
+  // eslint-disable-next-line no-console
+  console.info('Seeding default system pages (drafts)...');
+  const systemPages = [
+    { slug: 'privacy-policy', type: 'POLICY' as const, title: 'Privacy Policy' },
+    { slug: 'terms', type: 'POLICY' as const, title: 'Terms & Conditions' },
+    { slug: 'return-policy', type: 'POLICY' as const, title: 'Return & Refund Policy' },
+    { slug: 'shipping-policy', type: 'POLICY' as const, title: 'Shipping & Delivery Policy' },
+    { slug: 'about-us', type: 'ABOUT' as const, title: 'About Us' },
+    { slug: 'faq', type: 'FAQ' as const, title: 'Frequently Asked Questions' },
+  ];
+
+  for (const p of systemPages) {
+    await prisma.page.upsert({
+      where: { slug: p.slug },
+      update: {},
+      create: {
+        slug: p.slug,
+        type: p.type,
+        title: p.title,
+        status: 'DRAFT',
+        content: [
+          { type: 'heading', level: 1, text: p.title },
+          { type: 'richText', html: '<p>Content will be published soon by store administration.</p>' },
+        ],
+      },
+    });
   }
 
   // eslint-disable-next-line no-console
