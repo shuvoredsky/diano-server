@@ -16,6 +16,11 @@ import { wishlistRouter } from '@/modules/wishlist/wishlist.routes';
 import { checkoutRouter } from '@/modules/checkout/checkout.routes';
 import { abandonedCheckoutRouter } from '@/modules/abandoned-checkout/abandoned-checkout.routes';
 
+import { siteSettingsRouter } from '@/modules/site-settings/site-settings.routes';
+import { siteSettingsController } from '@/modules/site-settings/site-settings.controller';
+import { bannersRouter, publicBannersRouter } from '@/modules/banners/banners.routes';
+import { pagesRouter, publicPagesRouter } from '@/modules/pages/pages.routes';
+
 const rootRouter = Router();
 
 // Root health and readiness probes
@@ -54,6 +59,18 @@ rootRouter.use('/wishlist', wishlistRouter);
 // Checkout & Abandoned Checkouts
 rootRouter.use('/checkout', checkoutRouter);
 rootRouter.use('/abandoned-checkouts', abandonedCheckoutRouter);
+
+// Site Settings (Admin & Public)
+rootRouter.use('/settings', siteSettingsRouter);
+rootRouter.get('/public/site-config', siteSettingsController.getPublicSiteConfig);
+
+// Banners (Admin & Public)
+rootRouter.use('/banners', bannersRouter);
+rootRouter.use('/public/banners', publicBannersRouter);
+
+// CMS Pages (Admin & Public)
+rootRouter.use('/pages', pagesRouter);
+rootRouter.use('/public/pages', publicPagesRouter);
 
 export { rootRouter };
 

@@ -1516,6 +1516,245 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Recovery message triggered' } },
       },
     },
+    // Site Settings
+    '/api/v1/settings/{group}': {
+      get: {
+        tags: ['Site Settings'],
+        summary: 'Admin: Get typed setting group (store_profile, invoice, seo_defaults, contact)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'group', in: 'path', required: true, schema: { type: 'string', enum: ['store_profile', 'invoice', 'seo_defaults', 'contact'] } }],
+        responses: { 200: { description: 'Setting group configuration' } },
+      },
+      patch: {
+        tags: ['Site Settings'],
+        summary: 'Admin: Update typed setting group with validation and audit diff',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'group', in: 'path', required: true, schema: { type: 'string', enum: ['store_profile', 'invoice', 'seo_defaults', 'contact'] } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Updated setting group' } },
+      },
+    },
+    '/api/v1/settings/logo': {
+      post: {
+        tags: ['Site Settings'],
+        summary: 'Admin: Upload store logo (PNG, JPEG, WebP only, magic-byte validated)',
+        security: [{ BearerAuth: [] }],
+        requestBody: { content: { 'multipart/form-data': { schema: { type: 'object', properties: { logo: { type: 'string', format: 'binary' } } } } } },
+        responses: { 200: { description: 'Store logo updated' } },
+      },
+    },
+    '/api/v1/settings/favicon': {
+      post: {
+        tags: ['Site Settings'],
+        summary: 'Admin: Upload store favicon (ICO, PNG, WebP only, magic-byte validated)',
+        security: [{ BearerAuth: [] }],
+        requestBody: { content: { 'multipart/form-data': { schema: { type: 'object', properties: { favicon: { type: 'string', format: 'binary' } } } } } },
+        responses: { 200: { description: 'Store favicon updated' } },
+      },
+    },
+    '/api/v1/public/site-config': {
+      get: {
+        tags: ['Site Settings'],
+        summary: 'Public: Sanitized safe site configuration with ETag caching',
+        responses: {
+          200: { description: 'Safe public store profile, contact and SEO settings' },
+          304: { description: 'Not Modified (ETag match)' },
+        },
+      },
+    },
+    // Banners
+    '/api/v1/banners': {
+      get: {
+        tags: ['Banners'],
+        summary: 'Admin: List promotional banners with filters',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'placement', in: 'query', schema: { type: 'string', enum: ['HOME_HERO', 'HOME_SECONDARY', 'CATEGORY_TOP', 'ANNOUNCEMENT_BAR', 'POPUP'] } },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
+          { name: 'page', in: 'query', schema: { type: 'integer' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer' } },
+        ],
+        responses: { 200: { description: 'Paginated list of banners' } },
+      },
+      post: {
+        tags: ['Banners'],
+        summary: 'Admin: Create a promotional banner with scheduling bounds',
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 201: { description: 'Banner created' } },
+      },
+    },
+    '/api/v1/banners/reorder': {
+      put: {
+        tags: ['Banners'],
+        summary: 'Admin: Reorder banners within placement',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  items: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        sortOrder: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Banners reordered' } },
+      },
+    },
+    '/api/v1/banners/{id}': {
+      get: {
+        tags: ['Banners'],
+        summary: 'Admin: Get banner by ID',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Banner details' } },
+      },
+      put: {
+        tags: ['Banners'],
+        summary: 'Admin: Update banner details',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Banner updated' } },
+      },
+      delete: {
+        tags: ['Banners'],
+        summary: 'Admin: Delete banner',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Banner deleted' } },
+      },
+    },
+    '/api/v1/banners/{id}/toggle': {
+      patch: {
+        tags: ['Banners'],
+        summary: 'Admin: Toggle banner active state',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Banner active state toggled' } },
+      },
+    },
+    '/api/v1/public/banners': {
+      get: {
+        tags: ['Banners'],
+        summary: 'Public: Get active banners by placement within schedule window (Asia/Dhaka)',
+        parameters: [{ name: 'placement', in: 'query', required: true, schema: { type: 'string', enum: ['HOME_HERO', 'HOME_SECONDARY', 'CATEGORY_TOP', 'ANNOUNCEMENT_BAR', 'POPUP'] } }],
+        responses: { 200: { description: 'Active banners list' } },
+      },
+    },
+    // CMS Pages
+    '/api/v1/pages': {
+      get: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: List CMS pages with filters',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'type', in: 'query', schema: { type: 'string', enum: ['POLICY', 'ABOUT', 'FAQ', 'CUSTOM'] } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['DRAFT', 'PUBLISHED'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer' } },
+        ],
+        responses: { 200: { description: 'Paginated pages' } },
+      },
+      post: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Create a CMS page with typed block structure',
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 201: { description: 'Page created' } },
+      },
+    },
+    '/api/v1/pages/{id}': {
+      get: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Get page details by ID',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Page details' } },
+      },
+      put: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Update page blocks, SEO metadata, and title',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Page updated' } },
+      },
+      delete: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Delete page (blocked for system policy slugs)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Page deleted' }, 400: { description: 'System page cannot be deleted' } },
+      },
+    },
+    '/api/v1/pages/{id}/publish': {
+      post: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Publish page (increments version and snapshots PageRevision)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Page published and revision captured' } },
+      },
+    },
+    '/api/v1/pages/{id}/unpublish': {
+      post: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Unpublish page back to DRAFT',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Page unpublished' } },
+      },
+    },
+    '/api/v1/pages/{id}/revisions': {
+      get: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: List historical append-only page revisions',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'List of page revisions' } },
+      },
+    },
+    '/api/v1/pages/{id}/revisions/{version}/restore': {
+      post: {
+        tags: ['CMS Pages'],
+        summary: 'Admin: Restore page content from a past revision version',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'version', in: 'path', required: true, schema: { type: 'integer' } },
+        ],
+        responses: { 200: { description: 'Page restored from revision' } },
+      },
+    },
+    '/api/v1/public/pages': {
+      get: {
+        tags: ['CMS Pages'],
+        summary: 'Public: Navigation list of published pages (slug, title, type)',
+        responses: { 200: { description: 'Published pages navigation list' } },
+      },
+    },
+    '/api/v1/public/pages/{slug}': {
+      get: {
+        tags: ['CMS Pages'],
+        summary: 'Public: Get published page content blocks by slug',
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Published page content' }, 404: { description: 'Page not found or draft' } },
+      },
+    },
   },
 };
 
