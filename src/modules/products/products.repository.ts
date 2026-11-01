@@ -438,8 +438,14 @@ export class PrismaProductsRepository implements IProductsRepository {
       return true;
     }
 
-    // Pending Orders module (M8): OrderItem check will evaluate active unfulfilled orders
-    return false;
+    // Real orders check: Variant cannot be deleted if referenced in any order
+    const orderItemCount = await prisma.orderItem.count({
+      where: {
+        variantId,
+      },
+    });
+
+    return orderItemCount > 0;
   }
 
   async setRelatedProducts(productId: string, relatedProductIds: string[]): Promise<void> {
