@@ -13,6 +13,8 @@ import { purchaseOrdersRouter } from '@/modules/purchase-orders/purchase-orders.
 
 import { cartRouter } from '@/modules/cart/cart.routes';
 import { wishlistRouter } from '@/modules/wishlist/wishlist.routes';
+import { checkoutRouter } from '@/modules/checkout/checkout.routes';
+import { abandonedCheckoutRouter } from '@/modules/abandoned-checkout/abandoned-checkout.routes';
 
 const rootRouter = Router();
 
@@ -48,6 +50,10 @@ rootRouter.use('/purchase-orders', purchaseOrdersRouter);
 // Cart & Wishlist
 rootRouter.use('/cart', cartRouter);
 rootRouter.use('/wishlist', wishlistRouter);
+
+// Checkout & Abandoned Checkouts
+rootRouter.use('/checkout', checkoutRouter);
+rootRouter.use('/abandoned-checkouts', abandonedCheckoutRouter);
 
 export { rootRouter };
 

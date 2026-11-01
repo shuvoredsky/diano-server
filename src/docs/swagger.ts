@@ -1290,6 +1290,232 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Goods received and inventory/costing updated' } },
       },
     },
+    // ==========================================
+    // M7: Cart & Wishlist
+    // ==========================================
+    '/api/v1/cart': {
+      get: {
+        tags: ['Cart'],
+        summary: 'Get active cart (Guest or Authenticated Customer)',
+        responses: { 200: { description: 'Cart retrieved successfully' } },
+      },
+      delete: {
+        tags: ['Cart'],
+        summary: 'Clear all items in active cart',
+        responses: { 200: { description: 'Cart cleared' } },
+      },
+    },
+    '/api/v1/cart/items': {
+      post: {
+        tags: ['Cart'],
+        summary: 'Add item to active cart (Strict server pricing snapshot)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['variantId', 'quantity'],
+                properties: {
+                  variantId: { type: 'string' },
+                  quantity: { type: 'integer', minimum: 1 },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Item added to cart' } },
+      },
+    },
+    '/api/v1/cart/items/{variantId}': {
+      patch: {
+        tags: ['Cart'],
+        summary: 'Update cart item quantity',
+        parameters: [{ name: 'variantId', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['quantity'],
+                properties: { quantity: { type: 'integer', minimum: 0 } },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Item quantity updated' } },
+      },
+      delete: {
+        tags: ['Cart'],
+        summary: 'Remove single item from cart',
+        parameters: [{ name: 'variantId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Item removed from cart' } },
+      },
+    },
+    '/api/v1/cart/merge': {
+      post: {
+        tags: ['Cart'],
+        summary: 'Merge guest cart into authenticated customer cart upon login',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { guestToken: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Cart merged successfully' } },
+      },
+    },
+    '/api/v1/cart/validate': {
+      post: {
+        tags: ['Cart'],
+        summary: 'Validate cart against live inventory and catalog prices (Auto-applies price changes)',
+        responses: { 200: { description: 'Cart validated' } },
+      },
+    },
+    '/api/v1/wishlist': {
+      get: {
+        tags: ['Wishlist'],
+        summary: 'Get customer wishlist (Cost price strictly excluded)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Wishlist retrieved' } },
+      },
+    },
+    '/api/v1/wishlist/items': {
+      post: {
+        tags: ['Wishlist'],
+        summary: 'Add item to wishlist (Idempotent)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['variantId'],
+                properties: { variantId: { type: 'string' }, productId: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Item added to wishlist' } },
+      },
+    },
+    '/api/v1/wishlist/items/{variantId}': {
+      delete: {
+        tags: ['Wishlist'],
+        summary: 'Remove item from wishlist',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'variantId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Item removed from wishlist' } },
+      },
+    },
+    '/api/v1/wishlist/items/{variantId}/move-to-cart': {
+      post: {
+        tags: ['Wishlist'],
+        summary: 'Move wishlist item to customer cart',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'variantId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Item moved to cart' } },
+      },
+    },
+    // ==========================================
+    // M8: Checkout & Abandoned Checkout
+    // ==========================================
+    '/api/v1/checkout/sessions': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Initiate 128-bit unguessable checkout session from active cart snapshot',
+        responses: { 201: { description: 'Checkout session created' } },
+      },
+    },
+    '/api/v1/checkout/sessions/{id}': {
+      get: {
+        tags: ['Checkout'],
+        summary: 'Get checkout session summary (Protected by IDOR & Secret token)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Checkout session summary' } },
+      },
+    },
+    '/api/v1/checkout/sessions/{id}/customer-info': {
+      patch: {
+        tags: ['Checkout'],
+        summary: 'Update customer contact info with BD phone format validation',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Customer info updated' } },
+      },
+    },
+    '/api/v1/checkout/sessions/{id}/shipping-info': {
+      patch: {
+        tags: ['Checkout'],
+        summary: 'Update shipping address and recalculate dynamic shipping zone fee',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Shipping info updated' } },
+      },
+    },
+    '/api/v1/checkout/sessions/{id}/delivery-method': {
+      patch: {
+        tags: ['Checkout'],
+        summary: 'Update delivery method option',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Delivery method updated' } },
+      },
+    },
+    '/api/v1/checkout/sessions/{id}/payment-method': {
+      patch: {
+        tags: ['Checkout'],
+        summary: 'Select payment provider (COD, SSLCOMMERZ, BKASH, NAGAD)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Payment method selected' } },
+      },
+    },
+    '/api/v1/checkout/sessions/{id}/events': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Record client telemetry event with strict allowlisting (Strictly NO PII)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Event recorded' } },
+      },
+    },
+    '/api/v1/abandoned-checkouts': {
+      get: {
+        tags: ['Abandoned Checkout'],
+        summary: 'Admin: List filtered abandoned checkouts',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Abandoned checkouts list' } },
+      },
+    },
+    '/api/v1/abandoned-checkouts/stats': {
+      get: {
+        tags: ['Abandoned Checkout'],
+        summary: 'Admin: Aggregated funnel statistics with Asia/Dhaka date windowing',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Aggregated statistics' } },
+      },
+    },
+    '/api/v1/abandoned-checkouts/{id}': {
+      get: {
+        tags: ['Abandoned Checkout'],
+        summary: 'Admin: Checkout session detail with timeline and audited PII viewing',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Checkout session details' } },
+      },
+    },
+    '/api/v1/abandoned-checkouts/{id}/recovery': {
+      post: {
+        tags: ['Abandoned Checkout'],
+        summary: 'Admin: Manually trigger recovery message dispatch with consent guard',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Recovery message triggered' } },
+      },
+    },
   },
 };
 

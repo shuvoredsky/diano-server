@@ -264,3 +264,44 @@ ALTER TABLE "StockAuditItem"
 5. **Multi-District Shipping Zones:**
    - Instead of separate zone tables for every district, `ShippingZone.districts` stores a JSON array of district names, allowing admins to reassign districts through the admin UI without database migrations.
 
+---
+
+## 7. Cart & Wishlist Policies (M7)
+
+1. **Stock Reservation Policy:**
+   - Carts **NEVER** reserve stock in warehouse inventory. Stock reservation strictly occurs during order checkout placement (M9) to prevent denial-of-inventory attacks.
+2. **InventoryType Stock Checking Policies:**
+   - `READY_STOCK`: Enforces live warehouse available inventory check `quantity <= (onHand - reserved - damaged)`. Requests exceeding available stock are rejected or clamped.
+   - `PRE_ORDER`: Bypasses warehouse stock checks since items are manufactured/procured post-order. Enforces maximum per-item limit (`CART_MAX_ITEM_QTY = 10`).
+   - `MADE_TO_ORDER`: Bypasses physical warehouse stock checks. Enforces maximum per-item limit (`CART_MAX_ITEM_QTY = 10`).
+3. **Guest Token & Lifecycle:**
+   - Guest carts generate a 32-byte cryptographically random token transmitted via HttpOnly cookie `diano_cart_token` / `x-cart-token` header. The database only stores a SHA-256 hash.
+   - Guest carts expire after 30 days and are cleaned up via `cleanupExpiredGuestCarts(before: Date)`.
+4. **Wishlist Privacy:**
+   - Public Wishlist DTOs strictly omit `costPrice`, supplier references, and internal costing metadata.
+
+---
+
+## 8. Checkout Session Lifecycles & Telemetry (M8)
+
+1. **Session Identifiers & IDOR Security:**
+   - Public `sessionId`: 128-bit unguessable random string (16 bytes hex).
+   - Guest Sessions: Protected by a 256-bit `sessionSecretToken` generated on session creation. The database stores only its SHA-256 hash. Guest requests must supply the secret token or receive `403 Forbidden`.
+   - Logged-in Sessions: Access strictly restricted to `session.userId === req.user.userId`. Cross-user access returns `403 Forbidden`.
+2. **Sliding Expiry & Status Flow:**
+   - Sliding 30-minute window (`CHECKOUT_SESSION_TTL_MINUTES = 30`). Any progressive interaction touches `lastActivityAt` and extends `expiresAt`.
+   - Single Active Session per cart: Creating a new session expires any prior active session for that cart.
+   - Expired or converted sessions strictly block further mutations.
+3. **Abandoned Checkout Classification:**
+   - `ACTIVE` sessions with `lastActivityAt <= now - 30 minutes` and `expiresAt > now` are auto-classified as `ABANDONED` and trigger `CHECKOUT_ABANDONED` event.
+   - Sessions inactive < 30 minutes remain `ACTIVE` (strict classification boundary).
+   - Sessions with `expiresAt <= now` transition to `EXPIRED`.
+4. **Event Telemetry & Zero-PII Policy:**
+   - `POST /checkout/sessions/:id/events` enforces strict allowlisting: types allowlist (`checkout_started`, `customer_info_entered`, `shipping_info_entered`, `payment_method_selected`, `checkout_step_completed`, `checkout_abandoned`, `order_placed`).
+   - Metadata allowlist: `step`, `method`, `deviceCategory`. Any other metadata (especially form text, names, card numbers, or PII) is strictly rejected or stripped.
+5. **Recovery Consent & PII Retention:**
+   - Recovery dispatch requires explicit customer consent recorded in `ConsentRecord` (`purpose: 'RECOVERY'`). Without consent, recovery dispatch is blocked.
+   - Capped at maximum 2 recovery attempts per session with a 2-hour cooldown.
+   - `purgeExpiredCheckoutPii(olderThan)` anonymizes customer PII after 90 days while retaining session and event records for historical funnel analytics.
+
+

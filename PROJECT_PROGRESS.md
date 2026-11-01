@@ -21,7 +21,59 @@
 | **M5: Catalog & Inventory** | Categories, products, variants, SKU, image storage | ✅ Completed | Fully tested in No-DB mode |
 | **M5b: Professional Product Creation + Cloudinary** | Slot-based image uploads, Cloudinary integration, pricing engine, specification templates, rich-text sanitization, admin form options, strict validation | ✅ Completed | Fully tested in No-DB mode |
 | **M6: Inventory, Stock Ledger, Suppliers, Purchase Orders** | Multi-warehouse stock tracking, conditional atomic reservations, immutable StockMovement ledger, deadlock-free transfers, suppliers CRUD, purchase orders lifecycle & partial receiving, weighted average costing, stock audits & variance reconciliation | ✅ Completed | 305 unit tests passed, 16 DB integration tests skipped (DB required) |
-| **M7: Orders, Cart & Checkout** | Cart sessions, checkout locks, order state machine, payment events, refunds | ⏳ Queued Next | Awaiting user instruction |
+| **M7: Cart & Wishlist** | Guest cart with 32-byte opaque token (SHA-256 hashed in DB), logged-in cart, server pricing from variant.price, active catalog enforcement, stock clamping (onHand - reserved - damaged), pre-order rules, merge sum & clamp, validate issues (PRICE_CHANGED, OUT_OF_STOCK, INSUFFICIENT_STOCK, UNAVAILABLE), 30-day guest cart cleanup hook, customer wishlist with idempotent addition, move-to-cart, zero-leak DTOs | ✅ Completed | Fully tested in No-DB mode |
+| **M8: Checkout & Abandoned Checkout** | Server-side cart snapshot, 128-bit unguessable sessionId, IDOR protection (guest secret token hash, user ownership), 30m sliding expiry, BD phone validation, dynamic shipping fee calculation from ShippingZone/ShippingMethod (Inside 60 / Outside 120), CouponCalculator interface, strict telemetry allowlist (strictly NO PII), 90-day PII purge, auto-classification (30m boundary), RecoveryService with explicit ConsentRecord guard, NoopAdapter, max 2 attempts & cooldown, admin stats via SQL aggregation, audited customer PII viewing | ✅ Completed | Fully tested in No-DB mode |
+| **M9: Orders & State Machine** | Order placement, state machine transitions, payments integration | ⏳ Queued Next | Awaiting user instruction |
+
+---
+
+## Milestone M8: Checkout & Abandoned Checkout (Completed)
+- **Status:** Completed (No-DB Mode)
+- **Key Modules & Implementations:**
+  1. **Checkout Session Engine (`src/modules/checkout`):**
+     - **Session Snapshot:** Server creates snapshot from active cart. Client prices are strictly ignored.
+     - **Session Identifiers & IDOR Defense:** 128-bit unguessable public `sessionId` (16 bytes hex). Guest sessions enforce a 256-bit `sessionSecretToken` (stored as SHA-256 hash). Logged-in sessions enforce `userId` ownership. Cross-user access returns 403 Forbidden.
+     - **Sliding Expiry:** 30-minute sliding TTL. Inactive/expired sessions block writes.
+     - **Dynamic Shipping Calculation (`ShippingCalculator`):** Inspects `ShippingZone` & `ShippingMethod` tables (Inside Dhaka 60 BDT, Outside Dhaka 120 BDT based on district).
+     - **Zero-Discount Coupon Calculator (`CouponCalculator`):** Placeholder interface cleanly extendable for M12 coupons.
+     - **Telemetry & Event Tracking:** `POST /checkout/sessions/:id/events` strictly allowlists event types and metadata keys (`step`, `method`, `deviceCategory`). Free-text and PII are strictly rejected.
+  2. **Abandoned Checkout & Recovery (`src/modules/abandoned-checkout`):**
+     - **Inactivity Classification:** `classifyAbandonedSessions(now, 30)` auto-classifies active sessions inactive >= 30 mins into `ABANDONED` with `abandonedAt = now` and `CHECKOUT_ABANDONED` event. Sessions inactive < 30m remain `ACTIVE`.
+     - **Explicit Consent Guard:** Recovery message dispatch requires active `ConsentRecord` row (`purpose: 'RECOVERY'`). Without explicit consent, recovery dispatch is refused.
+     - **Anti-Spam Controls:** Capped at maximum 2 attempts per session with a 2-hour cooldown.
+     - **NoopAdapter:** Safe console recovery dispatch without third-party network dependencies.
+     - **Admin Funnel Analytics:** `GET /abandoned-checkouts/stats` executes pure SQL `groupBy` aggregation directly on PostgreSQL (zero Node-memory table loads) with Asia/Dhaka windowing and prior period comparison.
+     - **Audited Customer PII Access:** Viewing customer PII emits `VIEW_CUSTOMER_PII` in `AuditLog`.
+     - **Privacy Retention:** `purgeExpiredCheckoutPii(olderThan)` anonymizes customer PII after 90 days.
+- **DB Verification Pending List (To be executed when Neon PostgreSQL is connected):**
+  1. Real concurrent checkout session initialization for the same cart.
+  2. Postgres partial index uniqueness and IDOR secret token hash lookup.
+  3. Real cron execution of `classifyAbandonedSessions` against live PostgreSQL timestamps.
+  4. Database-level SQL groupBy performance for checkout funnel metrics.
+  5. Privacy PII purge query performance on high-volume session tables.
+
+---
+
+## Milestone M7: Cart & Wishlist (Completed)
+- **Status:** Completed (No-DB Mode)
+- **Key Modules & Implementations:**
+  1. **Cart Lifecycle & Strict Server Pricing (`src/modules/cart`):**
+     - **Guest Token Security:** Server generates 32-byte cryptographically random token via HttpOnly cookie `diano_cart_token` / `x-cart-token` header. DB stores only SHA-256 hash.
+     - **Server Pricing Source of Truth:** Item prices strictly snapshot from DB `variant.price`. Client-submitted price fields rejected by Zod (`.strict()`).
+     - **Active Catalog Verification:** Rejects deactivated/deleted products, variants, or categories.
+     - **Stock Clamping:** Limits quantities to available stock `(onHand - reserved - damaged)`. Zero stock reservation at cart level.
+     - **Merge Engine:** Combines guest cart into user cart on login, summing quantities, clamping to limits (`CART_MAX_ITEM_QTY = 10`), deleting guest cart idempotently, and reporting clamped items.
+     - **Validation (`POST /cart/validate`):** Flags `PRICE_CHANGED` (auto-applied), `OUT_OF_STOCK`, `INSUFFICIENT_STOCK`, `UNAVAILABLE` with recalculated totals.
+     - **30-Day Cleanup:** `cleanupExpiredGuestCarts(before)` hook for scheduled worker.
+  2. **Customer Wishlist (`src/modules/wishlist`):**
+     - Authenticated customer wishlist.
+     - Idempotent additions.
+     - `POST /wishlist/items/:variantId/move-to-cart`: Transfers item to active cart and removes from wishlist.
+     - Public DTOs strictly omit `costPrice` or internal costing metadata.
+- **DB Verification Pending List (To be executed when Neon PostgreSQL is connected):**
+  1. Guest token hash unique constraint and index lookup performance in PostgreSQL.
+  2. Concurrent guest cart merge under simultaneous login requests.
+  3. Bulk deletion performance for 30-day expired guest carts.
 
 ---
 

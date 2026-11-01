@@ -95,6 +95,11 @@ export const permissionsData = [
   { resource: 'analytics', action: 'view', name: 'View Analytics', slug: 'analytics:view', description: 'View sales and revenue metrics' },
   { resource: 'audit', action: 'view', name: 'View Audit Logs', slug: 'audit:view', description: 'Inspect system and security audit logs' },
   { resource: 'settings', action: 'update', name: 'Update Settings', slug: 'settings:update', description: 'Modify global store settings' },
+
+  // Checkout & Abandoned Checkout
+  { resource: 'checkout', action: 'read', name: 'Read Checkout', slug: 'checkout:read', description: 'View checkout sessions' },
+  { resource: 'abandoned_checkout', action: 'read', name: 'Read Abandoned Checkouts', slug: 'abandoned_checkout:read', description: 'View abandoned checkout metrics and sessions' },
+  { resource: 'abandoned_checkout', action: 'manage', name: 'Manage Abandoned Checkouts', slug: 'abandoned_checkout:manage', description: 'Trigger recovery actions and manage sessions' },
 ];
 
 export const rolesData = SYSTEM_ROLES;
