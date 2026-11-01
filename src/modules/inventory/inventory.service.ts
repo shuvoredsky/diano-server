@@ -131,12 +131,12 @@ export class InventoryService {
   /**
    * Reserve stock (idempotent, checkout / placed orders)
    */
-  async reserveStock(input: ReserveStockInput): Promise<StockOperationResult> {
+  async reserveStock(input: ReserveStockInput, tx?: any): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Reservation quantity must be greater than zero');
     }
 
-    const result = await this.repo.reserveStock(input);
+    const result = await this.repo.reserveStock(input, tx);
     this.checkStockAlerts(result.inventory);
     return result;
   }
@@ -144,12 +144,12 @@ export class InventoryService {
   /**
    * Release reserved stock (idempotent, payment failure / expired checkout / cancellation)
    */
-  async releaseReservation(input: ReleaseReservationInput): Promise<StockOperationResult> {
+  async releaseReservation(input: ReleaseReservationInput, tx?: any): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Release quantity must be greater than zero');
     }
 
-    const result = await this.repo.releaseReservation(input);
+    const result = await this.repo.releaseReservation(input, tx);
     this.checkStockAlerts(result.inventory);
     return result;
   }
@@ -157,12 +157,12 @@ export class InventoryService {
   /**
    * Commit reservation upon order confirmation / fulfillment / dispatch
    */
-  async commitReservation(input: CommitReservationInput): Promise<StockOperationResult> {
+  async commitReservation(input: CommitReservationInput, tx?: any): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Commit quantity must be greater than zero');
     }
 
-    const result = await this.repo.commitReservation(input);
+    const result = await this.repo.commitReservation(input, tx);
     this.checkStockAlerts(result.inventory);
     return result;
   }

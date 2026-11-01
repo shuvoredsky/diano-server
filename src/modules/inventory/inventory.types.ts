@@ -210,9 +210,9 @@ export interface IInventoryRepository {
   ): Promise<StockMovementEntity | null>;
   receiveStock(input: ReceiveStockInput): Promise<StockOperationResult>;
   adjustStock(input: AdjustStockInput): Promise<StockOperationResult>;
-  reserveStock(input: ReserveStockInput): Promise<StockOperationResult>;
-  releaseReservation(input: ReleaseReservationInput): Promise<StockOperationResult>;
-  commitReservation(input: CommitReservationInput): Promise<StockOperationResult>;
+  reserveStock(input: ReserveStockInput, tx?: any): Promise<StockOperationResult>;
+  releaseReservation(input: ReleaseReservationInput, tx?: any): Promise<StockOperationResult>;
+  commitReservation(input: CommitReservationInput, tx?: any): Promise<StockOperationResult>;
   markDamaged(input: MarkDamagedInput): Promise<StockOperationResult>;
   restock(input: RestockInput): Promise<StockOperationResult>;
   transferStock(input: TransferStockInput): Promise<TransferStockResult>;

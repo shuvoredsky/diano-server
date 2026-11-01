@@ -13,7 +13,11 @@ export interface ICouponCalculator {
 }
 
 export class DefaultCouponCalculator implements ICouponCalculator {
-  async calculateDiscount(): Promise<CouponCalculationResult> {
+  async calculateDiscount(_params?: {
+    couponCode?: string;
+    subtotal?: string;
+    userId?: string | null;
+  }): Promise<CouponCalculationResult> {
     return {
       discount: '0.00',
     };

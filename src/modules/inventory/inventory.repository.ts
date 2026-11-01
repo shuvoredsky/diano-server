@@ -369,10 +369,10 @@ export class PrismaInventoryRepository implements IInventoryRepository {
     }, TX_OPTIONS);
   }
 
-  async reserveStock(input: ReserveStockInput): Promise<StockOperationResult> {
-    return prisma.$transaction(async tx => {
+  async reserveStock(input: ReserveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
+    const run = async (activeTx: Prisma.TransactionClient) => {
       // Idempotency: check if identical movement already processed
-      const existing = await tx.stockMovement.findFirst({
+      const existing = await activeTx.stockMovement.findFirst({
         where: {
           variantId: input.variantId,
           referenceType: input.referenceType,
@@ -382,7 +382,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
       });
 
       if (existing) {
-        const inv = await tx.inventory.findUniqueOrThrow({
+        const inv = await activeTx.inventory.findUniqueOrThrow({
           where: {
             variantId_warehouseId: {
               variantId: input.variantId,
@@ -397,7 +397,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         };
       }
 
-      return this.executeAtomicStockChange(tx, {
+      return this.executeAtomicStockChange(activeTx, {
         variantId: input.variantId,
         warehouseId: input.warehouseId,
         action: 'RESERVE',
@@ -408,13 +408,18 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    }, TX_OPTIONS);
+    };
+
+    if (tx) {
+      return run(tx);
+    }
+    return prisma.$transaction(run, TX_OPTIONS);
   }
 
-  async releaseReservation(input: ReleaseReservationInput): Promise<StockOperationResult> {
-    return prisma.$transaction(async tx => {
+  async releaseReservation(input: ReleaseReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
+    const run = async (activeTx: Prisma.TransactionClient) => {
       // Idempotency check
-      const existing = await tx.stockMovement.findFirst({
+      const existing = await activeTx.stockMovement.findFirst({
         where: {
           variantId: input.variantId,
           referenceType: input.referenceType,
@@ -424,7 +429,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
       });
 
       if (existing) {
-        const inv = await tx.inventory.findUniqueOrThrow({
+        const inv = await activeTx.inventory.findUniqueOrThrow({
           where: {
             variantId_warehouseId: {
               variantId: input.variantId,
@@ -439,7 +444,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         };
       }
 
-      return this.executeAtomicStockChange(tx, {
+      return this.executeAtomicStockChange(activeTx, {
         variantId: input.variantId,
         warehouseId: input.warehouseId,
         action: 'RELEASE',
@@ -450,13 +455,18 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    }, TX_OPTIONS);
+    };
+
+    if (tx) {
+      return run(tx);
+    }
+    return prisma.$transaction(run, TX_OPTIONS);
   }
 
-  async commitReservation(input: CommitReservationInput): Promise<StockOperationResult> {
-    return prisma.$transaction(async tx => {
+  async commitReservation(input: CommitReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
+    const run = async (activeTx: Prisma.TransactionClient) => {
       // Idempotency check
-      const existing = await tx.stockMovement.findFirst({
+      const existing = await activeTx.stockMovement.findFirst({
         where: {
           variantId: input.variantId,
           referenceType: input.referenceType,
@@ -466,7 +476,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
       });
 
       if (existing) {
-        const inv = await tx.inventory.findUniqueOrThrow({
+        const inv = await activeTx.inventory.findUniqueOrThrow({
           where: {
             variantId_warehouseId: {
               variantId: input.variantId,
@@ -481,7 +491,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         };
       }
 
-      return this.executeAtomicStockChange(tx, {
+      return this.executeAtomicStockChange(activeTx, {
         variantId: input.variantId,
         warehouseId: input.warehouseId,
         action: 'COMMIT',
@@ -492,7 +502,12 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    }, TX_OPTIONS);
+    };
+
+    if (tx) {
+      return run(tx);
+    }
+    return prisma.$transaction(run, TX_OPTIONS);
   }
 
   async markDamaged(input: MarkDamagedInput): Promise<StockOperationResult> {
