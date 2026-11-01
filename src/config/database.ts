@@ -4,11 +4,17 @@ import { Pool } from 'pg';
 import { env } from '@/config/env.config';
 import { logger } from '@/utils/logger';
 
-// Pool configuration with low connection timeout for safe offline handling
+const activeDbUrl =
+  env.NODE_ENV === 'test' && process.env.TEST_DATABASE_URL
+    ? process.env.TEST_DATABASE_URL
+    : env.DATABASE_URL;
+
+// Pool configuration with robust timeout for cloud database connections
 export const pgPool = new Pool({
-  connectionString: env.DATABASE_URL,
-  connectionTimeoutMillis: 2000,
-  idleTimeoutMillis: 5000,
+  connectionString: activeDbUrl,
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 10000,
+  max: 20,
 });
 
 // Suppress unhandled pool error events when Postgres is offline

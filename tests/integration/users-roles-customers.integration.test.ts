@@ -3,6 +3,8 @@ import request from 'supertest';
 import { app } from '@/app';
 import { prisma } from '@/config/database';
 
+import { createTestSuperAdminAuth } from './test-auth-helper';
+
 const isTestDbAvailable = Boolean(
   process.env.TEST_DATABASE_URL &&
     process.env.DATABASE_URL &&
@@ -22,15 +24,30 @@ if (
 describe.skipIf(!isTestDbAvailable)(
   'Users, Roles & Customers API Integration Tests (Database Verification Required)',
   () => {
-    const superAdminToken = 'mock_super_admin_token';
+    let superAdminToken = '';
 
     beforeAll(async () => {
-      await prisma.$connect();
-    });
+      // 1. Ensure a user permission exists in database so GET /permissions groups 'user'
+      await prisma.permission.upsert({
+        where: { slug: 'user:read' },
+        update: {},
+        create: {
+          name: 'Read Users',
+          slug: 'user:read',
+          resource: 'user',
+          action: 'read',
+          description: 'Permission to read users',
+        },
+      });
+
+      // 2. Setup real super-admin credentials and active session
+      const auth = await createTestSuperAdminAuth();
+      superAdminToken = auth.token;
+    }, 30000);
 
     afterAll(async () => {
       await prisma.$disconnect();
-    });
+    }, 30000);
 
     it('GET /api/v1/roles - should return seeded system roles from database', async () => {
       const response = await request(app)
@@ -59,7 +76,8 @@ describe.skipIf(!isTestDbAvailable)(
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('pagination');
+      expect(response.body.meta).toHaveProperty('pagination');
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     it('GET /api/v1/customers - should return paginated customer accounts from database', async () => {
@@ -69,7 +87,8 @@ describe.skipIf(!isTestDbAvailable)(
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('pagination');
+      expect(response.body.meta).toHaveProperty('pagination');
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
   },
 );

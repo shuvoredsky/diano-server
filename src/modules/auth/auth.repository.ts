@@ -78,7 +78,15 @@ export class PrismaAuthRepository implements IAuthRepository {
         roles: {
           create: {
             role: {
-              connect: { slug: roleSlug },
+              connectOrCreate: {
+                where: { slug: roleSlug },
+                create: {
+                  name: roleSlug === 'customer' ? 'Customer' : roleSlug,
+                  slug: roleSlug,
+                  type: 'CUSTOMER',
+                  isSystem: true,
+                },
+              },
             },
           },
         },

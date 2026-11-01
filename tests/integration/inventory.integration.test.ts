@@ -30,6 +30,7 @@ describe.skipIf(!isTestDbAvailable)(
         data: {
           code: `WH-TEST-${Date.now()}`,
           name: 'Integration Test Warehouse',
+          address: 'Tejgaon Industrial Area, Dhaka',
           isActive: true,
         },
       });
@@ -47,6 +48,7 @@ describe.skipIf(!isTestDbAvailable)(
         data: {
           name: 'Integration Test T-Shirt',
           slug: `int-test-tshirt-${Date.now()}`,
+          description: 'Integration test product description',
           categoryId: category.id,
           mrp: 1000,
         },
@@ -74,22 +76,16 @@ describe.skipIf(!isTestDbAvailable)(
         referenceId: 'INIT-TEST-STOCK',
         reason: 'Integration test initial seed stock',
       });
-    });
+    }, 30000);
 
     afterAll(async () => {
-      // Cleanup created resources
-      if (testVariantId) {
-        await prisma.stockMovement.deleteMany({ where: { variantId: testVariantId } }).catch(() => {});
-        await prisma.inventory.deleteMany({ where: { variantId: testVariantId } }).catch(() => {});
-        await prisma.productVariant.deleteMany({ where: { id: testVariantId } }).catch(() => {});
-      }
-      if (testWarehouseId) {
-        await prisma.warehouse.deleteMany({ where: { id: testWarehouseId } }).catch(() => {});
-      }
+      // Disconnect cleanly (StockMovement is immutable ledger protected by DB trigger)
       await prisma.$disconnect();
-    });
+    }, 30000);
 
     it('Scenario 1: Real concurrent reserve with Promise.all (Stock 5, 10 concurrent reserve of 1 => exactly 5 succeed, 5 fail)', async () => {
+      const testRunId = Date.now();
+
       // Dispatch 10 concurrent reservation attempts of 1 unit each
       const attempts = Array.from({ length: 10 }).map((_, index) =>
         inventoryService
@@ -98,7 +94,7 @@ describe.skipIf(!isTestDbAvailable)(
             warehouseId: testWarehouseId,
             quantity: 1,
             referenceType: 'CHECKOUT',
-            referenceId: `CONCURRENT-CHECKOUT-${index}`,
+            referenceId: `CONCURRENT-CHECKOUT-${testRunId}-${index}`,
           })
           .then(() => ({ success: true, index }))
           .catch(err => ({ success: false, error: err.message, index })),
@@ -163,5 +159,91 @@ describe.skipIf(!isTestDbAvailable)(
         `,
       ).rejects.toThrow(/append-only|trigger/i);
     });
+
+    it('Scenario 4: Transfer deadlock prevention with concurrent opposite-direction transfers (WH-A -> WH-B and WH-B -> WH-A)', async () => {
+      // 1. Create a second warehouse
+      const wh2 = await prisma.warehouse.create({
+        data: {
+          code: `WH-TEST2-${Date.now()}`,
+          name: 'Integration Test Warehouse 2',
+          address: 'Chittagong Port Area',
+          isActive: true,
+        },
+      });
+
+      // 2. Receive 10 units in Warehouse 1 and 10 units in Warehouse 2
+      await inventoryService.receiveStock({
+        variantId: testVariantId,
+        warehouseId: testWarehouseId,
+        quantity: 10,
+        referenceType: 'MANUAL',
+        referenceId: `DEADLOCK-INIT-1-${Date.now()}`,
+        reason: 'Initial stock for deadlock test WH1',
+      });
+
+      await inventoryService.receiveStock({
+        variantId: testVariantId,
+        warehouseId: wh2.id,
+        quantity: 10,
+        referenceType: 'MANUAL',
+        referenceId: `DEADLOCK-INIT-2-${Date.now()}`,
+        reason: 'Initial stock for deadlock test WH2',
+      });
+
+      // 3. Concurrently trigger opposite-direction transfers
+      // Transfer 1: WH1 -> WH2 (2 units)
+      // Transfer 2: WH2 -> WH1 (3 units)
+      const transfer1Promise = inventoryService.transferStock({
+        variantId: testVariantId,
+        sourceWarehouseId: testWarehouseId,
+        targetWarehouseId: wh2.id,
+        quantity: 2,
+        reason: 'Transfer WH1 -> WH2 concurrent test',
+        referenceType: 'TRANSFER',
+        referenceId: `TRF-A-B-${Date.now()}`,
+      });
+
+      const transfer2Promise = inventoryService.transferStock({
+        variantId: testVariantId,
+        sourceWarehouseId: wh2.id,
+        targetWarehouseId: testWarehouseId,
+        quantity: 3,
+        reason: 'Transfer WH2 -> WH1 concurrent test',
+        referenceType: 'TRANSFER',
+        referenceId: `TRF-B-A-${Date.now()}`,
+      });
+
+      // Both must resolve cleanly without PostgreSQL deadlock (Code 40P01)
+      const [res1, res2] = await Promise.all([transfer1Promise, transfer2Promise]);
+
+      expect(res1.sourceInventory).toBeDefined();
+      expect(res2.sourceInventory).toBeDefined();
+
+      // Verify final balances
+      const inv1 = await prisma.inventory.findUnique({
+        where: {
+          variantId_warehouseId: {
+            variantId: testVariantId,
+            warehouseId: testWarehouseId,
+          },
+        },
+      });
+
+      const inv2 = await prisma.inventory.findUnique({
+        where: {
+          variantId_warehouseId: {
+            variantId: testVariantId,
+            warehouseId: wh2.id,
+          },
+        },
+      });
+
+      // Initial in WH1 was 5 (from beforeAll, reserved 5) + 10 received = 15.
+      // Net change in WH1: -2 (outbound) + 3 (inbound) = +1 => 15 + 1 = 16.
+      expect(inv1?.onHand).toBe(16);
+
+      // Initial in WH2 was 10. Net change in WH2: +2 (inbound) - 3 (outbound) = -1 => 10 - 1 = 9.
+      expect(inv2?.onHand).toBe(9);
+    }, 30000);
   },
 );

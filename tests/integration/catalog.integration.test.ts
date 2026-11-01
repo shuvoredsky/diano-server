@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '@/app';
 import { prisma } from '@/config/database';
+import { createTestSuperAdminAuth } from './test-auth-helper';
 
 const isTestDbAvailable = Boolean(
   process.env.TEST_DATABASE_URL &&
@@ -22,21 +23,24 @@ if (
 describe.skipIf(!isTestDbAvailable)(
   'Catalog & Inventory API Integration Tests (Database Verification Required)',
   () => {
-    const adminToken = 'mock_admin_token';
+    let adminToken = '';
     let createdCategoryId: string;
     let createdProductId: string;
 
     beforeAll(async () => {
-      // Clean up previous test catalog data
-      await prisma.productImage.deleteMany();
-      await prisma.productVariant.deleteMany();
-      await prisma.product.deleteMany();
-      await prisma.category.deleteMany();
-    });
+      // Clean up previous specific test catalog data
+      await prisma.productImage.deleteMany({ where: { product: { slug: 'oxford-cotton-shirt' } } }).catch(() => {});
+      await prisma.productVariant.deleteMany({ where: { product: { slug: 'oxford-cotton-shirt' } } }).catch(() => {});
+      await prisma.product.deleteMany({ where: { slug: 'oxford-cotton-shirt' } }).catch(() => {});
+      await prisma.category.deleteMany({ where: { slug: 'apparel-fashion' } }).catch(() => {});
+
+      const auth = await createTestSuperAdminAuth();
+      adminToken = auth.token;
+    }, 30000);
 
     afterAll(async () => {
       await prisma.$disconnect();
-    });
+    }, 30000);
 
     it('should create a root category in PostgreSQL and return valid CUID', async () => {
       const res = await request(app)

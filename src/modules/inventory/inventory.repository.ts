@@ -21,6 +21,8 @@ import type {
   StockAction,
 } from './inventory.types';
 
+const TX_OPTIONS = { maxWait: 15000, timeout: 20000 };
+
 export class PrismaInventoryRepository implements IInventoryRepository {
   /**
    * Helper: formats raw Prisma Inventory entity with computed availableStock
@@ -348,7 +350,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   async adjustStock(input: AdjustStockInput): Promise<StockOperationResult> {
@@ -364,7 +366,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId ?? `ADJ-${Date.now()}`,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   async reserveStock(input: ReserveStockInput): Promise<StockOperationResult> {
@@ -372,6 +374,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
       // Idempotency: check if identical movement already processed
       const existing = await tx.stockMovement.findFirst({
         where: {
+          variantId: input.variantId,
           referenceType: input.referenceType,
           referenceId: input.referenceId,
           action: 'RESERVE',
@@ -405,7 +408,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   async releaseReservation(input: ReleaseReservationInput): Promise<StockOperationResult> {
@@ -413,6 +416,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
       // Idempotency check
       const existing = await tx.stockMovement.findFirst({
         where: {
+          variantId: input.variantId,
           referenceType: input.referenceType,
           referenceId: input.referenceId,
           action: 'RELEASE',
@@ -446,7 +450,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   async commitReservation(input: CommitReservationInput): Promise<StockOperationResult> {
@@ -454,6 +458,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
       // Idempotency check
       const existing = await tx.stockMovement.findFirst({
         where: {
+          variantId: input.variantId,
           referenceType: input.referenceType,
           referenceId: input.referenceId,
           action: 'COMMIT',
@@ -487,7 +492,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   async markDamaged(input: MarkDamagedInput): Promise<StockOperationResult> {
@@ -503,7 +508,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId ?? `DMG-${Date.now()}`,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   async restock(input: RestockInput): Promise<StockOperationResult> {
@@ -519,7 +524,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    });
+    }, TX_OPTIONS);
   }
 
   /**
@@ -576,7 +581,7 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         outboundMovement: outbound.movement,
         inboundMovement: inbound.movement,
       };
-    });
+    }, TX_OPTIONS);
   }
 
   async listInventory(
