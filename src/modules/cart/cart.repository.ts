@@ -29,6 +29,7 @@ export class CartRepository implements ICartRepository {
         slug: string;
         status: string;
         inventoryType: string;
+        deletedAt?: Date | null;
         images?: Array<{ url: string; slot: string }>;
         category?: {
           id: string;
@@ -65,6 +66,7 @@ export class CartRepository implements ICartRepository {
               slug: item.variant.product.slug,
               status: item.variant.product.status,
               inventoryType: item.variant.product.inventoryType,
+              deletedAt: item.variant.product.deletedAt,
               thumbnailUrl: thumb,
               category: item.variant.product.category
                 ? {

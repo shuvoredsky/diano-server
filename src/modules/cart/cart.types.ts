@@ -20,6 +20,7 @@ export interface CartItemEntity {
       slug: string;
       status: string;
       inventoryType: string;
+      deletedAt?: Date | null;
       thumbnailUrl?: string | null;
       category?: {
         id: string;
