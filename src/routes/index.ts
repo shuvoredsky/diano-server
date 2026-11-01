@@ -11,6 +11,9 @@ import { inventoryRouter } from '@/modules/inventory/inventory.routes';
 import { suppliersRouter } from '@/modules/suppliers/suppliers.routes';
 import { purchaseOrdersRouter } from '@/modules/purchase-orders/purchase-orders.routes';
 
+import { cartRouter } from '@/modules/cart/cart.routes';
+import { wishlistRouter } from '@/modules/wishlist/wishlist.routes';
+
 const rootRouter = Router();
 
 // Root health and readiness probes
@@ -41,6 +44,10 @@ rootRouter.use('/inventory', inventoryRouter);
 // Suppliers & Inbound Purchase Orders (Admin)
 rootRouter.use('/suppliers', suppliersRouter);
 rootRouter.use('/purchase-orders', purchaseOrdersRouter);
+
+// Cart & Wishlist
+rootRouter.use('/cart', cartRouter);
+rootRouter.use('/wishlist', wishlistRouter);
 
 export { rootRouter };
 
