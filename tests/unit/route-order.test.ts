@@ -4,6 +4,7 @@ import { app } from '@/app';
 import { categoriesService } from '@/modules/categories/categories.service';
 import { productsService } from '@/modules/products/products.service';
 import { inventoryService } from '@/modules/inventory/inventory.service';
+import { stockAuditService } from '@/modules/inventory/stock-audit.service';
 import { generateAccessToken } from '@/utils/jwt.util';
 import { authRepository } from '@/modules/auth/auth.repository';
 import { permissionsCache } from '@/modules/permissions/permissions.cache';
@@ -167,6 +168,25 @@ describe('Route Order Verification (Supertest)', () => {
     expect(response.status).toBe(200);
     expect(response.body.message).toContain('Low stock variants retrieved successfully');
     expect(lowStockSpy).toHaveBeenCalledTimes(1);
+    expect(variantSpy).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/v1/inventory/audits should route to listAudits and NOT match /variant/:variantId', async () => {
+    const auditsSpy = vi
+      .spyOn(stockAuditService, 'listAudits')
+      .mockResolvedValue([]);
+
+    const variantSpy = vi
+      .spyOn(inventoryService, 'getInventoryByVariant')
+      .mockResolvedValue([]);
+
+    const response = await request(app)
+      .get('/api/v1/inventory/audits')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toContain('Stock audits retrieved successfully');
+    expect(auditsSpy).toHaveBeenCalledTimes(1);
     expect(variantSpy).not.toHaveBeenCalled();
   });
 });

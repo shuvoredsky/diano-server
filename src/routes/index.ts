@@ -8,6 +8,8 @@ import { customersRouter } from '@/modules/customers/customers.routes';
 import { categoriesRouter } from '@/modules/categories/categories.routes';
 import { productsRouter } from '@/modules/products/products.routes';
 import { inventoryRouter } from '@/modules/inventory/inventory.routes';
+import { suppliersRouter } from '@/modules/suppliers/suppliers.routes';
+import { purchaseOrdersRouter } from '@/modules/purchase-orders/purchase-orders.routes';
 
 const rootRouter = Router();
 
@@ -35,6 +37,10 @@ rootRouter.use('/products', productsRouter);
 
 // Inventory & Warehouse Management (Admin)
 rootRouter.use('/inventory', inventoryRouter);
+
+// Suppliers & Inbound Purchase Orders (Admin)
+rootRouter.use('/suppliers', suppliersRouter);
+rootRouter.use('/purchase-orders', purchaseOrdersRouter);
 
 export { rootRouter };
 

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { inventoryController } from './inventory.controller';
+import { stockAuditController } from './stock-audit.controller';
 import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
 
 const router = Router();
@@ -28,6 +29,17 @@ router.get('/movements', requirePermission('inventory:read'), inventoryControlle
  * Filter variants below reorder threshold
  */
 router.get('/low-stock', requirePermission('inventory:read'), inventoryController.listLowStock);
+
+// ==============================================================================
+// STOCK AUDITS (REGISTERED BEFORE PARAMETERIZED :variantId)
+// ==============================================================================
+
+router.post('/audits', requirePermission('inventory:audit'), stockAuditController.startAudit);
+router.get('/audits', requirePermission('inventory:audit'), stockAuditController.listAudits);
+router.get('/audits/:id', requirePermission('inventory:audit'), stockAuditController.getAuditById);
+router.post('/audits/:id/counts', requirePermission('inventory:audit'), stockAuditController.recordCounts);
+router.post('/audits/:id/approve', requirePermission('inventory:audit'), stockAuditController.approveAudit);
+router.post('/audits/:id/reject', requirePermission('inventory:audit'), stockAuditController.rejectAudit);
 
 // ==============================================================================
 // PARAMETERIZED ROUTES
