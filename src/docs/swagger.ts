@@ -839,6 +839,457 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Images reordered' } },
       },
     },
+    // ==============================================================================
+    // INVENTORY & STOCK LEDGER
+    // ==============================================================================
+    '/api/v1/inventory/summary': {
+      get: {
+        tags: ['Inventory'],
+        summary: 'Get aggregated inventory summary totals and financial valuations (cost fields require inventory:view_cost)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'warehouseId', in: 'query', schema: { type: 'string' } }],
+        responses: { 200: { description: 'Inventory summary retrieved' } },
+      },
+    },
+    '/api/v1/inventory/movements': {
+      get: {
+        tags: ['Inventory'],
+        summary: 'List paginated immutable stock movements ledger',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'variantId', in: 'query', schema: { type: 'string' } },
+          { name: 'warehouseId', in: 'query', schema: { type: 'string' } },
+          { name: 'type', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Movements ledger list retrieved' } },
+      },
+    },
+    '/api/v1/inventory/low-stock': {
+      get: {
+        tags: ['Inventory'],
+        summary: 'List variants at or below reorderLevel threshold',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'warehouseId', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Low stock items retrieved' } },
+      },
+    },
+    '/api/v1/inventory/variant/{variantId}': {
+      get: {
+        tags: ['Inventory'],
+        summary: 'Get multi-warehouse inventory breakdown for a specific variant',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'variantId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'warehouseId', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Variant inventory retrieved' } },
+      },
+    },
+    '/api/v1/inventory': {
+      get: {
+        tags: ['Inventory'],
+        summary: 'List paginated inventory items with filtering and search',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'warehouseId', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'lowStockOnly', in: 'query', schema: { type: 'boolean' } },
+          { name: 'outOfStockOnly', in: 'query', schema: { type: 'boolean' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Inventory list retrieved' } },
+      },
+    },
+    '/api/v1/inventory/receive': {
+      post: {
+        tags: ['Inventory'],
+        summary: 'Receive stock into warehouse with immutable ledger entry',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['variantId', 'warehouseId', 'quantity'],
+                properties: {
+                  variantId: { type: 'string' },
+                  warehouseId: { type: 'string' },
+                  quantity: { type: 'integer', minimum: 1 },
+                  reason: { type: 'string' },
+                  referenceType: { type: 'string' },
+                  referenceId: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Stock received successfully' } },
+      },
+    },
+    '/api/v1/inventory/adjust': {
+      post: {
+        tags: ['Inventory'],
+        summary: 'Record manual stock adjustment (positive or negative) with required audit reason',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['variantId', 'warehouseId', 'quantity', 'reason'],
+                properties: {
+                  variantId: { type: 'string' },
+                  warehouseId: { type: 'string' },
+                  quantity: { type: 'integer' },
+                  reason: { type: 'string', minLength: 3 },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Stock adjusted' } },
+      },
+    },
+    '/api/v1/inventory/damage': {
+      post: {
+        tags: ['Inventory'],
+        summary: 'Mark items as damaged (quarantined from available stock)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['variantId', 'warehouseId', 'quantity', 'reason'],
+                properties: {
+                  variantId: { type: 'string' },
+                  warehouseId: { type: 'string' },
+                  quantity: { type: 'integer', minimum: 1 },
+                  reason: { type: 'string', minLength: 3 },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Damaged stock quarantined' } },
+      },
+    },
+    '/api/v1/inventory/transfer': {
+      post: {
+        tags: ['Inventory'],
+        summary: 'Atomic inter-warehouse stock transfer with deadlock-safe lock ordering',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['variantId', 'sourceWarehouseId', 'targetWarehouseId', 'quantity', 'reason'],
+                properties: {
+                  variantId: { type: 'string' },
+                  sourceWarehouseId: { type: 'string' },
+                  targetWarehouseId: { type: 'string' },
+                  quantity: { type: 'integer', minimum: 1 },
+                  reason: { type: 'string', minLength: 3 },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Stock transferred' } },
+      },
+    },
+    // ==============================================================================
+    // STOCK AUDITS
+    // ==============================================================================
+    '/api/v1/inventory/audits': {
+      post: {
+        tags: ['Inventory: Audit'],
+        summary: 'Start physical stock audit for warehouse (status IN_PROGRESS)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['warehouseId'],
+                properties: {
+                  warehouseId: { type: 'string' },
+                  notes: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Audit initiated' } },
+      },
+      get: {
+        tags: ['Inventory: Audit'],
+        summary: 'List stock audits',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'warehouseId', in: 'query', schema: { type: 'string' } }],
+        responses: { 200: { description: 'Stock audits list' } },
+      },
+    },
+    '/api/v1/inventory/audits/{id}': {
+      get: {
+        tags: ['Inventory: Audit'],
+        summary: 'Get stock audit details with discrepancy calculations',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Audit details' } },
+      },
+    },
+    '/api/v1/inventory/audits/{id}/counts': {
+      post: {
+        tags: ['Inventory: Audit'],
+        summary: 'Record physical count entries and calculate variances against system on-hand',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['items'],
+                properties: {
+                  items: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['variantId', 'countedQuantity'],
+                      properties: {
+                        variantId: { type: 'string' },
+                        countedQuantity: { type: 'integer', minimum: 0 },
+                        notes: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Counts recorded and variances updated' } },
+      },
+    },
+    '/api/v1/inventory/audits/{id}/approve': {
+      post: {
+        tags: ['Inventory: Audit'],
+        summary: 'Approve audit and reconcile all variances strictly via ledger movements (direct update blocked)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Audit approved and ledger reconciled' } },
+      },
+    },
+    '/api/v1/inventory/audits/{id}/reject': {
+      post: {
+        tags: ['Inventory: Audit'],
+        summary: 'Reject audit without adjusting stock levels',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Audit rejected' } },
+      },
+    },
+    // ==============================================================================
+    // SUPPLIERS
+    // ==============================================================================
+    '/api/v1/suppliers': {
+      get: {
+        tags: ['Suppliers'],
+        summary: 'List paginated suppliers',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Suppliers retrieved' } },
+      },
+      post: {
+        tags: ['Suppliers'],
+        summary: 'Create new supplier with unique code and validation',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string', minLength: 2 },
+                  code: { type: 'string' },
+                  contactPerson: { type: 'string' },
+                  email: { type: 'string' },
+                  phone: { type: 'string' },
+                  address: { type: 'string' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Supplier created' } },
+      },
+    },
+    '/api/v1/suppliers/{id}': {
+      get: {
+        tags: ['Suppliers'],
+        summary: 'Get supplier by ID with purchase orders count',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Supplier retrieved' } },
+      },
+      patch: {
+        tags: ['Suppliers'],
+        summary: 'Update supplier details',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Supplier updated' } },
+      },
+      delete: {
+        tags: ['Suppliers'],
+        summary: 'Soft-delete supplier',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Supplier soft deleted' } },
+      },
+    },
+    // ==============================================================================
+    // PURCHASE ORDERS
+    // ==============================================================================
+    '/api/v1/purchase-orders': {
+      get: {
+        tags: ['Purchase Orders'],
+        summary: 'List paginated purchase orders with filtering by supplier, warehouse, variant, status, and dates',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'supplierId', in: 'query', schema: { type: 'string' } },
+          { name: 'warehouseId', in: 'query', schema: { type: 'string' } },
+          { name: 'variantId', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Purchase orders retrieved' } },
+      },
+      post: {
+        tags: ['Purchase Orders'],
+        summary: 'Create draft purchase order with line items',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['supplierId', 'items'],
+                properties: {
+                  supplierId: { type: 'string' },
+                  warehouseId: { type: 'string' },
+                  expectedDeliveryDate: { type: 'string', format: 'date-time' },
+                  notes: { type: 'string' },
+                  items: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['variantId', 'orderedQuantity', 'unitCost'],
+                      properties: {
+                        variantId: { type: 'string' },
+                        orderedQuantity: { type: 'integer', minimum: 1 },
+                        unitCost: { type: 'number', minimum: 0 },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Purchase order created' } },
+      },
+    },
+    '/api/v1/purchase-orders/{id}': {
+      get: {
+        tags: ['Purchase Orders'],
+        summary: 'Get purchase order details including supplier, warehouse, and line items',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Purchase order details' } },
+      },
+    },
+    '/api/v1/purchase-orders/{id}/status': {
+      patch: {
+        tags: ['Purchase Orders'],
+        summary: 'Transition purchase order status (state machine validation)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: { type: 'string', enum: ['ORDERED', 'CANCELLED'] },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Status updated' } },
+      },
+    },
+    '/api/v1/purchase-orders/{id}/receive': {
+      post: {
+        tags: ['Purchase Orders'],
+        summary: 'Receive items against purchase order (supports partial receive, blocks over-receive, calculates weighted average cost)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['items'],
+                properties: {
+                  items: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['variantId', 'quantity'],
+                      properties: {
+                        variantId: { type: 'string' },
+                        quantity: { type: 'integer', minimum: 1 },
+                      },
+                    },
+                  },
+                  notes: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Goods received and inventory/costing updated' } },
+      },
+    },
   },
 };
 

@@ -20,8 +20,49 @@
 | **M4: Users, Roles, Permissions & Customers** | Administrative user management, privilege escalation guards, role hierarchy levels, system role protection, in-memory cache invalidation, customer self-service (profile, address book CRUD, consents, export, PII anonymization), admin customer management & timeline | ✅ Completed | 114 unit tests passed, 9 DB integration tests skipped (DB required) |
 | **M5: Catalog & Inventory** | Categories, products, variants, SKU, image storage | ✅ Completed | Fully tested in No-DB mode |
 | **M5b: Professional Product Creation + Cloudinary** | Slot-based image uploads, Cloudinary integration, pricing engine, specification templates, rich-text sanitization, admin form options, strict validation | ✅ Completed | Fully tested in No-DB mode |
-| **M6: Cart & Checkout** | Cart sessions, abandoned cart tracking, atomic stock reservations | ⏳ Queued Next | Awaiting user instruction |
-| **M7: Orders & Payments** | Order state machine, payment events, idempotency keys, refunds | ⏳ Queued | Planned |
+| **M6: Inventory, Stock Ledger, Suppliers, Purchase Orders** | Multi-warehouse stock tracking, conditional atomic reservations, immutable StockMovement ledger, deadlock-free transfers, suppliers CRUD, purchase orders lifecycle & partial receiving, weighted average costing, stock audits & variance reconciliation | ✅ Completed | 305 unit tests passed, 16 DB integration tests skipped (DB required) |
+| **M7: Orders, Cart & Checkout** | Cart sessions, checkout locks, order state machine, payment events, refunds | ⏳ Queued Next | Awaiting user instruction |
+
+---
+
+## Milestone M6: Inventory, Stock Ledger, Suppliers & Purchase Orders (Completed)
+- **Status:** Completed (No-DB Mode)
+- **Key Modules & Implementations:**
+  1. **Core Transaction-Safe Stock Ledger (`src/modules/inventory`):**
+     - **Stock Metrics Definition:**
+       - `onHand`: Physical quantity in warehouse.
+       - `reserved`: Active customer cart/checkout reservations.
+       - `damaged`: Broken, spoiled, or quarantined stock.
+       - `availableStock = onHand - reserved - damaged`.
+     - **Conditional Atomic Operations:** Zero read-then-write race conditions. All updates enforce SQL conditional bounds (`WHERE ("onHand" - "reserved" - "damaged") >= $qty`) and fail immediately if affected rows = 0.
+     - **Append-Only Ledger Guarantee:** Stock mutations and `StockMovement` creation occur strictly inside the same transaction. Public repository does not expose standalone inventory update without movement.
+     - **Deterministic Lock Ordering in Transfers:** Multi-warehouse transfers sort warehouse IDs alphabetically before acquiring locks (`FOR UPDATE`), completely eliminating database deadlocks during concurrent bi-directional movements.
+     - **Idempotency:** Reservations and commits check `referenceType + referenceId + action` to prevent double-booking.
+     - **TTL Expiration Worker Hook:** `releaseExpiredReservations(before: Date)` batch-releases timed-out checkout reservations.
+  2. **Inventory Admin Endpoints & Security:**
+     - `GET /api/v1/inventory/summary`: Database-level SQL aggregations (`SUM(onHand * costPrice)`, `netStockValue`). Valuation figures stripped unless operator possesses `inventory:view_cost` or `super-admin` role.
+     - `GET /api/v1/inventory/movements`: Paginated immutable audit ledger filterable by variant, warehouse, movement type, actor, and date.
+     - `GET /api/v1/inventory/low-stock`: Returns variants where `availableStock <= reorderLevel`.
+     - `GET /api/v1/inventory/variant/:variantId`: Multi-warehouse breakdown for a variant.
+     - `POST /api/v1/inventory/receive`, `/adjust`, `/damage`, `/transfer`: Atomic stock mutations with actor attribution and audit logging.
+     - Real inventory check replaces `hasStockOrOrders` placeholder in products repository to block soft-deletion of variants with active onHand or reserved units.
+  3. **Suppliers Management (`src/modules/suppliers`):**
+     - CRUD with soft deletion (`deletedAt`), unique name and phone number collision guards, and auto-generated `SUP-XXXXXX` supplier codes.
+     - Endpoints: `GET /api/v1/suppliers`, `POST /api/v1/suppliers`, `GET /api/v1/suppliers/:id`, `PATCH /api/v1/suppliers/:id`, `DELETE /api/v1/suppliers/:id`.
+  4. **Purchase Orders & Inbound Receiving (`src/modules/purchase-orders`):**
+     - **PO State Machine:** `DRAFT -> ORDERED -> PARTIALLY_RECEIVED -> RECEIVED / CANCELLED`. Invalid transitions rejected with 400 Bad Request.
+     - **Collision-Safe PO Number Generator:** Format `PO-YYYYMMDD-XXXX`.
+     - **Partial Receiving & Over-Receive Block:** Verifies `receivedQuantity + qty <= orderedQuantity`. Blocks over-receiving at line item level.
+     - **Weighted Average Costing Engine (`purchase-orders.costing.ts`):** Pure function `calculateWeightedAverageCost(currentOnHand, currentCostPrice, receivedQty, unitCost)`. Automatically recalculates variant `costPrice` upon goods receipt and logs `COST_PRICE_UPDATED` in `AuditLog`.
+  5. **Stock Audit & Ledger-Backed Reconciliation (`StockAudit`):**
+     - Physical count initiation (`POST /api/v1/inventory/audits`) sets audit status `IN_PROGRESS`.
+     - Count entry records physical counts and calculates variances (`countedQuantity - systemQuantity`).
+     - Audit approval reconciles all discrepancies strictly via `inventoryService.adjustStock` ledger entries (direct database mutation of inventory rows is completely blocked).
+- **DB Verification Pending List (To be executed when Neon PostgreSQL is connected):**
+  1. Real concurrent reservations race condition test with `Promise.all` (e.g. stock 5, 10 concurrent requests of 1 unit -> exactly 5 succeed, 5 fail).
+  2. Database CHECK constraint enforcement (`chk_inventory_available_stock_non_negative`, `chk_inventory_on_hand_non_negative`, `chk_inventory_reserved_non_negative`).
+  3. PostgreSQL append-only trigger `trg_block_stock_movement_mutation` blocking direct `UPDATE` or `DELETE` on `StockMovement`.
+  4. Real PostgreSQL SQL aggregation performance for `SUM(onHand * costPrice)`.
 
 ---
 

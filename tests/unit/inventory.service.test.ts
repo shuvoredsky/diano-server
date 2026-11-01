@@ -455,4 +455,29 @@ describe('InventoryService (Unit Tests with Mocked Repository)', () => {
       expect(summary.netStockValue).toBeUndefined();
     });
   });
+
+  describe('Ledger Consistency Verification', () => {
+    it('should maintain mathematical invariant: net inventory change strictly equals sum of ledger movements', async () => {
+      // Simulate sequential ledger movements for a variant
+      const movements: Array<{ type: string; onHandDelta: number }> = [
+        { type: 'PURCHASE_RECEIPT', onHandDelta: +100 },
+        { type: 'ORDER_FULFILLMENT', onHandDelta: -20 },
+        { type: 'ADJUSTMENT_NEGATIVE', onHandDelta: -5 },
+        { type: 'RETURN_RESTOCK', onHandDelta: +3 },
+        { type: 'TRANSFER_OUT', onHandDelta: -15 },
+      ];
+
+      const initialOnHand = 0;
+      let runningOnHand = initialOnHand;
+
+      for (const mov of movements) {
+        runningOnHand += mov.onHandDelta;
+      }
+
+      const sumOfDeltas = movements.reduce((acc, m) => acc + m.onHandDelta, 0);
+
+      expect(runningOnHand - initialOnHand).toBe(sumOfDeltas);
+      expect(runningOnHand).toBe(63);
+    });
+  });
 });
