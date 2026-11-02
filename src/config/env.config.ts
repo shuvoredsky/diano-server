@@ -64,6 +64,35 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().optional().default('noreply@diano.com'),
+
+  // Payment Gateway Configuration
+  PAYMENT_ENABLED_PROVIDERS: z.string().default('COD,SSLCOMMERZ'),
+  SSLCOMMERZ_STORE_ID: z.string().optional(),
+  SSLCOMMERZ_STORE_PASSWORD: z.string().optional(),
+  SSLCOMMERZ_IS_LIVE: z.preprocess(val => val === 'true' || val === true, z.boolean()).default(false),
+  BACKEND_PUBLIC_URL: z.string().default('http://localhost:5000'),
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
+}).superRefine((data, ctx) => {
+  const enabled = (data.PAYMENT_ENABLED_PROVIDERS || 'COD,SSLCOMMERZ')
+    .split(',')
+    .map(p => p.trim().toUpperCase());
+
+  if (enabled.includes('SSLCOMMERZ') && data.NODE_ENV !== 'test') {
+    if (!data.SSLCOMMERZ_STORE_ID) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SSLCOMMERZ_STORE_ID is required when SSLCOMMERZ is enabled',
+        path: ['SSLCOMMERZ_STORE_ID'],
+      });
+    }
+    if (!data.SSLCOMMERZ_STORE_PASSWORD) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SSLCOMMERZ_STORE_PASSWORD is required when SSLCOMMERZ is enabled',
+        path: ['SSLCOMMERZ_STORE_PASSWORD'],
+      });
+    }
+  }
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

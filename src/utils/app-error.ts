@@ -41,6 +41,14 @@ export class AppError extends Error {
     return new AppError(message, 500, errors, false);
   }
 
+  static notImplemented(message = 'Not implemented', errors?: unknown): AppError {
+    return new AppError(message, 501, errors);
+  }
+
+  static badGateway(message = 'Bad gateway', errors?: unknown): AppError {
+    return new AppError(message, 502, errors);
+  }
+
   static serviceUnavailable(message = 'Service temporarily unavailable', errors?: unknown): AppError {
     return new AppError(message, 503, errors);
   }
