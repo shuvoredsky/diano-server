@@ -1,5 +1,6 @@
 import { prisma } from '@/config/database';
 import type { Prisma } from '@prisma/client';
+import { logger } from '@/utils/logger';
 import { inventoryService } from '@/modules/inventory/inventory.service';
 import { assertValidTransition } from '@/modules/orders/orders.state-machine';
 import { assertValidPaymentTransition } from './payments.state-machine';
@@ -161,7 +162,7 @@ export class PaymentsRepository {
     provider: PaymentProvider;
     eventId: string;
     eventType: string;
-    rawPayload: Record<string, any>;
+    rawPayload: Record<string, unknown>;
     signatureValid?: boolean;
   }): Promise<{ event: PaymentEventEntity | null; isDuplicate: boolean }> {
     const redactedPayload = redactPaymentPayload(data.rawPayload);
@@ -192,8 +193,8 @@ export class PaymentsRepository {
       });
 
       return { event: event as unknown as PaymentEventEntity, isDuplicate: false };
-    } catch (err: any) {
-      if (err.code === 'P2002') {
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code === 'P2002') {
         return { event: null, isDuplicate: true };
       }
       throw err;
@@ -216,7 +217,7 @@ export class PaymentsRepository {
     cardType?: string;
     eventId: string;
     eventType: string;
-    rawPayload: Record<string, any>;
+    rawPayload: Record<string, unknown>;
     actorContext?: { id?: string; actorType?: 'USER' | 'SYSTEM' | 'WEBHOOK' };
   }): Promise<{ payment: PaymentEntity; alreadyPaid: boolean }> {
     return await prisma.$transaction(async tx => {
@@ -322,6 +323,38 @@ export class PaymentsRepository {
             note: `Payment verified via ${payment.provider} (TranID: ${payment.transactionId})`,
           },
         });
+      } else if (order.status === 'CANCELLED') {
+        // Late IPN: order was already CANCELLED, but payment was verified PAID at gateway.
+        // Record payment as PAID, do NOT auto-confirm order or commit stock.
+        // Add FLAGGED marker, order note, and trigger admin alert placeholder.
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            paymentStatus: 'PAID',
+          },
+        });
+
+        await tx.orderNote.create({
+          data: {
+            orderId: order.id,
+            note: `FLAGGED: Late payment of ${payment.amount} BDT verified after cancellation. Action needed: Refund required. (TranID: ${payment.transactionId})`,
+            isCustomerVisible: false,
+          },
+        });
+
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: 'CANCELLED',
+            changedById: params.actorContext?.id || null,
+            note: `FLAGGED: Late payment verified via ${payment.provider} after cancellation - refund required (TranID: ${payment.transactionId})`,
+          },
+        });
+
+        logger.warn(
+          { orderId: order.id, transactionId: payment.transactionId, amount: payment.amount.toString() },
+          '[ADMIN_ALERT] Late payment verified on CANCELLED order - Refund required',
+        );
       } else {
         // If order was already confirmed or in progress, update paymentStatus
         await tx.order.update({
@@ -336,7 +369,7 @@ export class PaymentsRepository {
       await tx.auditLog.create({
         data: {
           actorId: params.actorContext?.id || null,
-          actorType: (params.actorContext?.actorType as any) || 'WEBHOOK',
+          actorType: params.actorContext?.actorType || 'WEBHOOK',
           action: 'PAYMENT_PAID',
           targetType: 'PAYMENT',
           targetId: payment.id,
@@ -387,7 +420,7 @@ export class PaymentsRepository {
     reason: string;
     eventId: string;
     eventType: string;
-    rawPayload: Record<string, any>;
+    rawPayload: Record<string, unknown>;
     actorContext?: { id?: string; actorType?: 'USER' | 'SYSTEM' | 'WEBHOOK' };
   }): Promise<PaymentEntity> {
     return await prisma.$transaction(async tx => {

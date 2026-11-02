@@ -13,6 +13,7 @@ import type {
   GatewayRefundInput,
   GatewayRefundResult,
   GatewayQueryResult,
+  PaymentStatus,
 } from '../payments.types';
 
 export class SslcommerzGateway implements PaymentGateway {
@@ -85,21 +86,25 @@ export class SslcommerzGateway implements PaymentGateway {
         throw AppError.badGateway(`SSLCOMMERZ session init failed with HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as Record<string, unknown>;
 
       if (data.status !== 'SUCCESS' || !data.GatewayPageURL) {
-        const errorMsg = data.failedreason || data.status || 'Session initialization failed';
+        const errorMsg =
+          (data.failedreason as string) ||
+          (data.status as string) ||
+          'Session initialization failed';
         throw AppError.badGateway(`SSLCOMMERZ error: ${errorMsg}`);
       }
 
       return {
-        gatewayUrl: data.GatewayPageURL,
-        sessionKey: data.sessionkey,
-        providerReference: data.sessionkey,
+        gatewayUrl: data.GatewayPageURL as string,
+        sessionKey: data.sessionkey as string,
+        providerReference: data.sessionkey as string,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof AppError) throw err;
-      throw AppError.badGateway(`SSLCOMMERZ connection error: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      throw AppError.badGateway(`SSLCOMMERZ connection error: ${message}`);
     }
   }
 
@@ -145,30 +150,31 @@ export class SslcommerzGateway implements PaymentGateway {
         };
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as Record<string, unknown>;
       const isValid = data.status === 'VALID' || data.status === 'VALIDATED';
 
       return {
         isValid,
         status: isValid ? 'VALID' : 'FAILED',
-        transactionId: data.tran_id || input.transactionId || '',
-        bankTranId: data.bank_tran_id,
-        amount: parseFloat(data.amount || '0'),
-        currency: data.currency_type || data.currency || 'BDT',
-        cardType: data.card_type,
-        cardBrand: data.card_brand,
-        validationId: data.val_id,
+        transactionId: (data.tran_id as string) || input.transactionId || '',
+        bankTranId: data.bank_tran_id as string | undefined,
+        amount: parseFloat((data.amount as string) || '0'),
+        currency: (data.currency_type as string) || (data.currency as string) || 'BDT',
+        cardType: data.card_type as string | undefined,
+        cardBrand: data.card_brand as string | undefined,
+        validationId: data.val_id as string | undefined,
         rawResponse: data,
-        errorMessage: isValid ? undefined : data.error || 'Transaction status is not VALID',
+        errorMessage: isValid ? undefined : (data.error as string) || 'Transaction status is not VALID',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
         isValid: false,
         status: 'FAILED',
         transactionId: input.transactionId || '',
         amount: 0,
         currency: 'BDT',
-        errorMessage: `Validation request error: ${err.message}`,
+        errorMessage: `Validation request error: ${message}`,
       };
     }
   }
@@ -177,11 +183,11 @@ export class SslcommerzGateway implements PaymentGateway {
    * Handles customer browser redirect callback from SSLCOMMERZ.
    * Zero trust: Never trusts the redirect body status; parses val_id for server verification.
    */
-  async handleCallback(payload: Record<string, any>): Promise<GatewayCallbackResult> {
-    const transactionId = payload.tran_id;
-    const valId = payload.val_id;
-    const bankTranId = payload.bank_tran_id;
-    const status = payload.status;
+  async handleCallback(payload: Record<string, unknown>): Promise<GatewayCallbackResult> {
+    const transactionId = typeof payload.tran_id === 'string' ? payload.tran_id : '';
+    const valId = typeof payload.val_id === 'string' ? payload.val_id : undefined;
+    const bankTranId = typeof payload.bank_tran_id === 'string' ? payload.bank_tran_id : undefined;
+    const status = typeof payload.status === 'string' ? payload.status : '';
 
     return {
       success: status === 'VALID' || status === 'VALIDATED',
@@ -189,9 +195,9 @@ export class SslcommerzGateway implements PaymentGateway {
       valId,
       status,
       bankTranId,
-      amount: payload.amount ? parseFloat(payload.amount) : undefined,
-      currency: payload.currency || 'BDT',
-      errorMessage: payload.error,
+      amount: payload.amount ? parseFloat(String(payload.amount)) : undefined,
+      currency: typeof payload.currency === 'string' ? payload.currency : 'BDT',
+      errorMessage: typeof payload.error === 'string' ? payload.error : undefined,
       rawPayload: payload,
     };
   }
@@ -205,7 +211,7 @@ export class SslcommerzGateway implements PaymentGateway {
    * 4. Build query string: key1=val1&key2=val2...
    * 5. MD5 of string must equal verify_sign.
    */
-  verifyIpnSignature(payload: Record<string, any>): boolean {
+  verifyIpnSignature(payload: Record<string, unknown>): boolean {
     const verifySign = payload.verify_sign;
     const verifyKey = payload.verify_key;
 
@@ -228,27 +234,31 @@ export class SslcommerzGateway implements PaymentGateway {
     const sortedKeys = Object.keys(mappedData).sort();
     const hashString = sortedKeys.map(k => `${k}=${mappedData[k]}`).join('&');
     const calculatedSign = this.md5(hashString);
-
-    return calculatedSign.toLowerCase() === (verifySign as string).toLowerCase();
+    const a = Buffer.from(calculatedSign.toLowerCase(), 'utf8');
+    const b = Buffer.from(String(verifySign).trim().toLowerCase(), 'utf8');
+    if (a.length !== b.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(a, b);
   }
 
   /**
    * Handles incoming Instant Payment Notification (IPN).
    * Validates authenticity signature first, then prepares for Order Validation API call.
    */
-  async handleIpn(payload: Record<string, any>): Promise<GatewayIpnResult> {
+  async handleIpn(payload: Record<string, unknown>): Promise<GatewayIpnResult> {
     const isAuthentic = this.verifyIpnSignature(payload);
 
     return {
       isAuthentic,
-      transactionId: payload.tran_id,
-      valId: payload.val_id,
-      status: payload.status,
-      bankTranId: payload.bank_tran_id,
-      amount: payload.amount ? parseFloat(payload.amount) : undefined,
-      currency: payload.currency || 'BDT',
+      transactionId: typeof payload.tran_id === 'string' ? payload.tran_id : '',
+      valId: typeof payload.val_id === 'string' ? payload.val_id : undefined,
+      status: typeof payload.status === 'string' ? payload.status : '',
+      bankTranId: typeof payload.bank_tran_id === 'string' ? payload.bank_tran_id : undefined,
+      amount: payload.amount ? parseFloat(String(payload.amount)) : undefined,
+      currency: typeof payload.currency === 'string' ? payload.currency : 'BDT',
+      error: isAuthentic ? undefined : 'IPN signature verification failed',
       rawPayload: payload,
-      error: isAuthentic ? undefined : 'Invalid IPN signature hash',
     };
   }
 
@@ -282,21 +292,22 @@ export class SslcommerzGateway implements PaymentGateway {
         };
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as Record<string, unknown>;
       const isSuccess = data.status === 'success' || data.status === 'processing';
 
       return {
         success: isSuccess,
         refundStatus: isSuccess ? 'COMPLETED' : 'FAILED',
-        providerRefundId: data.refund_ref_id || data.trans_id,
+        providerRefundId: (data.refund_ref_id as string) || (data.trans_id as string),
         rawResponse: data,
-        errorMessage: isSuccess ? undefined : data.errorReason || data.status,
+        errorMessage: isSuccess ? undefined : (data.errorReason as string) || (data.status as string),
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
         success: false,
         refundStatus: 'FAILED',
-        errorMessage: `Refund connection error: ${err.message}`,
+        errorMessage: `Refund connection error: ${message}`,
       };
     }
   }
@@ -335,20 +346,21 @@ export class SslcommerzGateway implements PaymentGateway {
         };
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as Record<string, unknown>;
       const isSuccess = data.status === 'success' || data.status === 'processing';
 
       return {
         success: isSuccess,
         refundStatus: isSuccess ? 'COMPLETED' : 'FAILED',
-        providerRefundId: data.refund_ref_id,
+        providerRefundId: data.refund_ref_id as string | undefined,
         rawResponse: data,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
         success: false,
         refundStatus: 'FAILED',
-        errorMessage: err.message,
+        errorMessage: message,
       };
     }
   }
@@ -380,8 +392,8 @@ export class SslcommerzGateway implements PaymentGateway {
         };
       }
 
-      const data = (await response.json()) as any;
-      let status: any = 'PENDING';
+      const data = (await response.json()) as Record<string, unknown>;
+      let status: PaymentStatus = 'PENDING';
 
       if (data.status === 'VALID' || data.status === 'VALIDATED') {
         status = 'PAID';
@@ -396,16 +408,17 @@ export class SslcommerzGateway implements PaymentGateway {
       return {
         status,
         transactionId,
-        bankTranId: data.bank_tran_id,
-        amount: data.amount ? parseFloat(data.amount) : undefined,
-        currency: data.currency || 'BDT',
+        bankTranId: data.bank_tran_id as string | undefined,
+        amount: data.amount ? parseFloat(data.amount as string) : undefined,
+        currency: (data.currency as string) || 'BDT',
         rawResponse: data,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
         status: 'PENDING',
         transactionId,
-        rawResponse: { error: err.message },
+        rawResponse: { error: message },
       };
     }
   }

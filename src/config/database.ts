@@ -9,11 +9,10 @@ const activeDbUrl =
     ? process.env.TEST_DATABASE_URL
     : env.DATABASE_URL;
 
-// Pool configuration with robust timeout for cloud database connections
 export const pgPool = new Pool({
   connectionString: activeDbUrl,
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 25000,
+  idleTimeoutMillis: 30000,
   max: 20,
 });
 

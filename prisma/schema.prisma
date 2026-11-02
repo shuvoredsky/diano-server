@@ -107,6 +107,7 @@ enum ReturnStatus {
   APPROVED
   REJECTED
   ITEM_RECEIVED
+  RECEIVED
   INSPECTED
   REFUNDED
   REPLACED
@@ -121,6 +122,8 @@ enum ShipmentStatus {
   DELIVERED
   FAILED_ATTEMPT
   RETURNED_TO_ORIGIN
+  RETURNING
+  RETURNED
 }
 
 enum CheckoutStatus {
@@ -167,6 +170,7 @@ enum FraudReviewStatus {
   MANUAL_REVIEW
   APPROVED
   REJECTED
+  OTP_REQUESTED
 }
 
 enum CouponType {
@@ -982,6 +986,7 @@ model Order {
   couponId                String?
   notes                   String?
   placedAt                DateTime        @default(now())
+  paymentDeadline         DateTime?
   confirmedAt             DateTime?
   shippedAt               DateTime?
   deliveredAt             DateTime?
@@ -1007,6 +1012,7 @@ model Order {
   @@index([status])
   @@index([paymentStatus])
   @@index([placedAt])
+  @@index([paymentDeadline])
   @@index([orderNumber])
 }
 
@@ -1199,16 +1205,18 @@ model ShippingZone {
 }
 
 model ShippingMethod {
-  id             String   @id @default(cuid())
-  shippingZoneId String
-  name           String
-  code           String   @unique
-  baseCharge     Decimal  @db.Decimal(12, 2)
-  perKgCharge    Decimal  @default(0.00) @db.Decimal(12, 2)
-  estimatedDays  String
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  shippingZoneId        String
+  name                  String
+  code                  String   @unique
+  baseCharge            Decimal  @db.Decimal(12, 2)
+  perKgCharge           Decimal  @default(0.00) @db.Decimal(12, 2)
+  freeShippingThreshold Decimal? @db.Decimal(12, 2)
+  estimatedDays         String
+  sortOrder             Int      @default(0)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   shippingZone ShippingZone @relation(fields: [shippingZoneId], references: [id], onDelete: Restrict)
   shipments    Shipment[]
@@ -1283,6 +1291,8 @@ model Coupon {
   perUserLimit   Int        @default(1)
   usedCount      Int        @default(0)
   firstOrderOnly Boolean    @default(false)
+  allowOnSale    Boolean    @default(true)
+  scopes         Json?      @default("{}")
   isActive       Boolean    @default(true)
   deletedAt      DateTime?
   createdAt      DateTime   @default(now())

@@ -68,7 +68,7 @@ export interface OrderEntity {
   id: string;
   orderNumber: string;
   idempotencyKey?: string | null;
-  customerId: string;
+  customerId: string | null;
   status: OrderStatus;
   subtotal: string;
   discountTotal: string;
@@ -83,6 +83,7 @@ export interface OrderEntity {
   couponId?: string | null;
   notes?: string | null;
   placedAt: Date;
+  paymentDeadline?: Date | null;
   confirmedAt?: Date | null;
   shippedAt?: Date | null;
   deliveredAt?: Date | null;

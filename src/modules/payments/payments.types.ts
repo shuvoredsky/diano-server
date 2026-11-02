@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, OrderStatus } from '@prisma/client';
 
 export type PaymentStatus =
   | 'INITIATED'
@@ -39,9 +39,17 @@ export interface PaymentEntity {
   failureReason: string | null;
   createdAt: Date;
   updatedAt: Date;
-  order?: any;
+  order?: PaymentOrderReference | null;
   events?: PaymentEventEntity[];
   refunds?: RefundEntity[];
+}
+
+export interface PaymentOrderReference {
+  id: string;
+  orderNumber?: string;
+  status: OrderStatus;
+  customerId?: string | null;
+  grandTotal?: number | Prisma.Decimal | string;
 }
 
 export interface PaymentEventEntity {
@@ -50,7 +58,7 @@ export interface PaymentEventEntity {
   provider: PaymentProvider;
   eventId: string;
   eventType: string;
-  rawPayloadRedacted: Record<string, any>;
+  rawPayloadRedacted: Record<string, unknown>;
   signatureValid: boolean;
   processedAt: Date;
   createdAt: Date;
@@ -114,7 +122,7 @@ export interface GatewayVerifyResult {
   cardType?: string;
   cardBrand?: string;
   validationId?: string;
-  rawResponse?: Record<string, any>;
+  rawResponse?: Record<string, unknown>;
   errorMessage?: string;
 }
 
@@ -127,7 +135,7 @@ export interface GatewayCallbackResult {
   amount?: number;
   currency?: string;
   errorMessage?: string;
-  rawPayload: Record<string, any>;
+  rawPayload: Record<string, unknown>;
 }
 
 export interface GatewayIpnResult {
@@ -138,7 +146,7 @@ export interface GatewayIpnResult {
   bankTranId?: string;
   amount?: number;
   currency?: string;
-  rawPayload: Record<string, any>;
+  rawPayload: Record<string, unknown>;
   error?: string;
 }
 
@@ -155,7 +163,7 @@ export interface GatewayRefundResult {
   refundStatus: RefundStatus;
   providerRefundId?: string;
   errorMessage?: string;
-  rawResponse?: Record<string, any>;
+  rawResponse?: Record<string, unknown>;
 }
 
 export interface GatewayQueryResult {
@@ -164,15 +172,15 @@ export interface GatewayQueryResult {
   bankTranId?: string;
   amount?: number;
   currency?: string;
-  rawResponse?: Record<string, any>;
+  rawResponse?: Record<string, unknown>;
 }
 
 export interface PaymentGateway {
   readonly provider: PaymentProvider;
   initialize(input: GatewayInitializeInput): Promise<GatewayInitializeResult>;
   verify(input: GatewayVerifyInput): Promise<GatewayVerifyResult>;
-  handleCallback(payload: Record<string, any>): Promise<GatewayCallbackResult>;
-  handleIpn(payload: Record<string, any>): Promise<GatewayIpnResult>;
+  handleCallback(payload: Record<string, unknown>): Promise<GatewayCallbackResult>;
+  handleIpn(payload: Record<string, unknown>): Promise<GatewayIpnResult>;
   initiateRefund(input: GatewayRefundInput): Promise<GatewayRefundResult>;
   verifyRefund(refundId: string, bankTranId?: string): Promise<GatewayRefundResult>;
   queryTransaction(transactionId: string): Promise<GatewayQueryResult>;

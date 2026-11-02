@@ -5,6 +5,9 @@ import { pageBlockSchema, pageContentBlocksSchema, SYSTEM_PAGE_SLUGS } from '@/m
 import { PagesService } from '@/modules/pages/pages.service';
 import { sanitizeDescription } from '@/utils/sanitize.util';
 import { PageStatus } from '@prisma/client';
+import type { SiteSettingsRepository } from '@/modules/site-settings/site-settings.repository';
+import type { PagesRepository } from '@/modules/pages/pages.repository';
+import type { IAuditService } from '@/services/audit.service';
 
 describe('CMS & Site Settings Unit Tests', () => {
   beforeEach(() => {
@@ -19,7 +22,10 @@ describe('CMS & Site Settings Unit Tests', () => {
         findMany: vi.fn(),
       };
       const mockAudit = { record: vi.fn() };
-      const service = new SiteSettingsService(mockRepo as any, mockAudit as any);
+      const service = new SiteSettingsService(
+        mockRepo as unknown as SiteSettingsRepository,
+        mockAudit as unknown as IAuditService,
+      );
 
       // 1. MIME check
       const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
@@ -40,7 +46,10 @@ describe('CMS & Site Settings Unit Tests', () => {
         findMany: vi.fn(),
       };
       const mockAudit = { record: vi.fn() };
-      const service = new SiteSettingsService(mockRepo as any, mockAudit as any);
+      const service = new SiteSettingsService(
+        mockRepo as unknown as SiteSettingsRepository,
+        mockAudit as unknown as IAuditService,
+      );
 
       const svgBuffer = Buffer.from('<svg><circle r="10"/></svg>');
       await expect(
@@ -147,7 +156,10 @@ describe('CMS & Site Settings Unit Tests', () => {
         }),
         delete: vi.fn(),
       };
-      const service = new PagesService(mockRepo as any, { record: vi.fn() } as any);
+      const service = new PagesService(
+        mockRepo as unknown as PagesRepository,
+        { record: vi.fn() } as unknown as IAuditService,
+      );
 
       await expect(service.deletePage('page-terms')).rejects.toThrow(
         /System page 'terms' is critical for store compliance and cannot be deleted/,
@@ -184,7 +196,10 @@ describe('CMS & Site Settings Unit Tests', () => {
         }),
       };
       const mockAudit = { record: vi.fn() };
-      const service = new PagesService(mockRepo as any, mockAudit as any);
+      const service = new PagesService(
+        mockRepo as unknown as PagesRepository,
+        mockAudit as unknown as IAuditService,
+      );
 
       const published = await service.publishPage('p-1', { userId: 'admin-1', actorType: 'USER' });
 
@@ -210,7 +225,10 @@ describe('CMS & Site Settings Unit Tests', () => {
       const mockRepo = {
         findBySlug: vi.fn().mockResolvedValue(draftPage),
       };
-      const service = new PagesService(mockRepo as any, { record: vi.fn() } as any);
+      const service = new PagesService(
+        mockRepo as unknown as PagesRepository,
+        { record: vi.fn() } as unknown as IAuditService,
+      );
 
       await expect(service.getPublishedPageBySlug('secret-launch')).rejects.toThrow(
         /not found or is currently not published/,

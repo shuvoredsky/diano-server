@@ -1,4 +1,5 @@
 import { AppError } from '@/utils/app-error';
+import type { Prisma } from '@prisma/client';
 import type {
   IInventoryRepository,
   InventoryEntity,
@@ -131,7 +132,7 @@ export class InventoryService {
   /**
    * Reserve stock (idempotent, checkout / placed orders)
    */
-  async reserveStock(input: ReserveStockInput, tx?: any): Promise<StockOperationResult> {
+  async reserveStock(input: ReserveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Reservation quantity must be greater than zero');
     }
@@ -144,7 +145,7 @@ export class InventoryService {
   /**
    * Release reserved stock (idempotent, payment failure / expired checkout / cancellation)
    */
-  async releaseReservation(input: ReleaseReservationInput, tx?: any): Promise<StockOperationResult> {
+  async releaseReservation(input: ReleaseReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Release quantity must be greater than zero');
     }
@@ -157,7 +158,7 @@ export class InventoryService {
   /**
    * Commit reservation upon order confirmation / fulfillment / dispatch
    */
-  async commitReservation(input: CommitReservationInput, tx?: any): Promise<StockOperationResult> {
+  async commitReservation(input: CommitReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Commit quantity must be greater than zero');
     }

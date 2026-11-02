@@ -3,6 +3,7 @@ import { ApiResponse } from '@/utils/api-response';
 import { AppError } from '@/utils/app-error';
 import { permissionsCache } from '@/modules/permissions/permissions.cache';
 import { ordersService, type OrdersService } from './orders.service';
+import type { OrderFilter } from './orders.types';
 import {
   createOrderSchema,
   orderFilterSchema,
@@ -188,10 +189,13 @@ export class OrdersController {
       const page = filter.page ?? 1;
       const limit = filter.limit ?? 20;
 
-      const { items, total } = await this.service.listOrdersForAdmin(filter as any, {
-        id: req.user.userId,
-        permissions,
-      });
+      const { items, total } = await this.service.listOrdersForAdmin(
+        filter as unknown as OrderFilter,
+        {
+          id: req.user.userId,
+          permissions,
+        },
+      );
 
       const totalPages = Math.ceil(total / limit) || 1;
       ApiResponse.paginated(res, 'Orders list retrieved successfully', items, {

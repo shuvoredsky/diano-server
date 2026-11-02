@@ -1,5 +1,5 @@
 import type { Decimal } from 'decimal.js';
-import type { StockMovementType } from '@prisma/client';
+import type { Prisma, StockMovementType } from '@prisma/client';
 
 export type StockAction =
   | 'RECEIVE'
@@ -210,9 +210,9 @@ export interface IInventoryRepository {
   ): Promise<StockMovementEntity | null>;
   receiveStock(input: ReceiveStockInput): Promise<StockOperationResult>;
   adjustStock(input: AdjustStockInput): Promise<StockOperationResult>;
-  reserveStock(input: ReserveStockInput, tx?: any): Promise<StockOperationResult>;
-  releaseReservation(input: ReleaseReservationInput, tx?: any): Promise<StockOperationResult>;
-  commitReservation(input: CommitReservationInput, tx?: any): Promise<StockOperationResult>;
+  reserveStock(input: ReserveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
+  releaseReservation(input: ReleaseReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
+  commitReservation(input: CommitReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
   markDamaged(input: MarkDamagedInput): Promise<StockOperationResult>;
   restock(input: RestockInput): Promise<StockOperationResult>;
   transferStock(input: TransferStockInput): Promise<TransferStockResult>;

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '@/config/database';
+import type { Prisma } from '@prisma/client';
 import { AppError } from '@/utils/app-error';
 import { auditService, type IAuditService } from '@/services/audit.service';
 import { inventoryService } from '@/modules/inventory/inventory.service';
@@ -78,7 +79,7 @@ export class OrdersService {
       await this.fraudAssessor.assessOrder(result.order);
 
       await this.audit.record({
-        actorId: currentUser?.id || result.order.customerId,
+        actorId: currentUser?.id || result.order.customerId || undefined,
         actorType: currentUser ? 'USER' : 'GUEST',
         action: 'ORDER_CREATED',
         targetType: 'ORDER',
@@ -234,7 +235,7 @@ export class OrdersService {
       }
 
       // 3. Update timestamps and status in Order table
-      const updateData: any = {
+      const updateData: Prisma.OrderUpdateInput = {
         status: input.status,
       };
 

@@ -46,10 +46,11 @@ export class PaymentsService {
     }
 
     // 1. Authorization & IDOR guard
+    const customerSnapshot = order.customerSnapshot as Record<string, unknown> | null;
     const isOwner = actorContext.userId && order.customerId === actorContext.userId;
     const isGuestOwner =
       dto.guestToken &&
-      ((order.customerSnapshot as any)?.guestToken === dto.guestToken ||
+      (customerSnapshot?.guestToken === dto.guestToken ||
         actorContext.guestToken === dto.guestToken);
 
     if (!isOwner && !isGuestOwner) {
@@ -88,29 +89,34 @@ export class PaymentsService {
       );
     }
 
-    // If all previous attempts are FAILED, CANCELLED, or EXPIRED, re-reserve stock if needed
+    // If all previous attempts are FAILED, CANCELLED, or EXPIRED, re-reserve stock atomically if needed
     if (existingPayments.length > 0) {
       const defaultWarehouse = await prisma.warehouse.findFirst({
         where: { isDefault: true, isActive: true },
       });
       const warehouseId = defaultWarehouse?.id || 'WH-DHK-01';
 
-      for (const item of order.items) {
-        if (item.variantId) {
-          try {
-            await inventoryService.reserveStock({
-              variantId: item.variantId,
-              warehouseId,
-              quantity: item.quantity,
-              referenceType: 'ORDER',
-              referenceId: order.orderNumber,
-              reason: `Stock re-reserved for payment retry (${order.orderNumber})`,
-            });
-          } catch (err: any) {
-            // If out of stock on retry, reject cleanly
-            throw AppError.badRequest(`Insufficient stock to retry payment: ${err.message}`);
+      try {
+        await prisma.$transaction(async tx => {
+          for (const item of order.items) {
+            if (item.variantId) {
+              await inventoryService.reserveStock(
+                {
+                  variantId: item.variantId,
+                  warehouseId,
+                  quantity: item.quantity,
+                  referenceType: 'ORDER',
+                  referenceId: order.orderNumber,
+                  reason: `Stock re-reserved for payment retry (${order.orderNumber})`,
+                },
+                tx,
+              );
+            }
           }
-        }
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw AppError.badRequest(`Insufficient stock to retry payment: ${message}`);
       }
     }
 
@@ -136,7 +142,7 @@ export class PaymentsService {
     const gateway = this.registry.getGateway(order.paymentMethod as PaymentProvider);
 
     // Extract address details
-    const shippingAddr = (order.shippingAddressSnapshot as any) || {};
+    const shippingAddr = (order.shippingAddressSnapshot as Record<string, unknown> | null) || {};
 
     try {
       const initResult = await gateway.initialize({
@@ -147,15 +153,15 @@ export class PaymentsService {
         transactionId,
         customer: {
           id: order.customer?.id,
-          name: order.customer?.name || (order.customerSnapshot as any)?.name || 'Valued Customer',
-          email: order.customer?.email || (order.customerSnapshot as any)?.email || 'customer@example.com',
-          phone: order.customer?.phone || (order.customerSnapshot as any)?.phone || '01700000000',
+          name: order.customer?.name || (typeof customerSnapshot?.name === 'string' ? customerSnapshot.name : 'Valued Customer'),
+          email: order.customer?.email || (typeof customerSnapshot?.email === 'string' ? customerSnapshot.email : 'customer@example.com'),
+          phone: order.customer?.phone || (typeof customerSnapshot?.phone === 'string' ? customerSnapshot.phone : '01700000000'),
         },
         shippingAddress: {
-          address1: shippingAddr.address1 || shippingAddr.street || 'Dhaka',
-          city: shippingAddr.city || 'Dhaka',
-          postalCode: shippingAddr.postalCode || '1000',
-          country: shippingAddr.country || 'Bangladesh',
+          address1: (shippingAddr.address1 as string) || (shippingAddr.street as string) || 'Dhaka',
+          city: (shippingAddr.city as string) || 'Dhaka',
+          postalCode: (shippingAddr.postalCode as string) || '1000',
+          country: (shippingAddr.country as string) || 'Bangladesh',
         },
       });
 
@@ -170,10 +176,11 @@ export class PaymentsService {
         transactionId,
         gatewayUrl: initResult.gatewayUrl,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       await this.repo.updatePayment(payment.id, {
         status: 'FAILED',
-        failureReason: err.message,
+        failureReason: message,
       });
       throw err;
     }
@@ -186,10 +193,10 @@ export class PaymentsService {
    */
   async handleSslCallback(
     action: 'success' | 'fail' | 'cancel',
-    payload: Record<string, any>,
+    payload: Record<string, unknown>,
   ): Promise<{ redirectUrl: string }> {
     const frontendBaseUrl = env.FRONTEND_URL || 'http://localhost:3000';
-    const transactionId = payload.tran_id;
+    const transactionId = typeof payload.tran_id === 'string' ? payload.tran_id : '';
 
     if (!transactionId) {
       return {
@@ -217,13 +224,17 @@ export class PaymentsService {
     // 2. Handle cancellation or failure callback
     if (action === 'cancel' || action === 'fail') {
       const targetStatus = action === 'cancel' ? 'CANCELLED' : 'FAILED';
-      const reason = payload.error || (action === 'cancel' ? 'Customer cancelled payment' : 'Payment failed at gateway');
+      const reason =
+        (typeof payload.error === 'string' ? payload.error : undefined) ||
+        (action === 'cancel' ? 'Customer cancelled payment' : 'Payment failed at gateway');
 
       await this.repo.markPaymentFailedInTransaction({
         paymentId: payment.id,
         status: targetStatus,
         reason,
-        eventId: payload.val_id || `EVENT-${transactionId}-${action}`,
+        eventId:
+          (typeof payload.val_id === 'string' ? payload.val_id : undefined) ||
+          `EVENT-${transactionId}-${action}`,
         eventType: `SSLCOMMERZ_${action.toUpperCase()}`,
         rawPayload: payload,
       });
@@ -234,7 +245,7 @@ export class PaymentsService {
     }
 
     // 3. Handle success callback: MUST execute server-side Order Validation API check
-    const valId = payload.val_id;
+    const valId = typeof payload.val_id === 'string' ? payload.val_id : '';
     if (!valId) {
       await this.repo.markPaymentFailedInTransaction({
         paymentId: payment.id,
@@ -303,7 +314,7 @@ export class PaymentsService {
    * 3. Server-to-server Order Validation API double-check.
    * 4. Atomic PAID transition with stock commit and order confirmation.
    */
-  async handleSslIpn(payload: Record<string, any>): Promise<{ status: string; processed: boolean }> {
+  async handleSslIpn(payload: Record<string, unknown>): Promise<{ status: string; processed: boolean }> {
     const gateway = this.registry.getGateway('SSLCOMMERZ');
 
     // 1. Authenticity check: MD5 hash verification of verify_sign
@@ -313,8 +324,11 @@ export class PaymentsService {
       throw AppError.badRequest('Invalid IPN signature hash');
     }
 
-    const transactionId = payload.tran_id;
-    const eventId = payload.val_id || payload.tran_id;
+    const transactionId = typeof payload.tran_id === 'string' ? payload.tran_id : '';
+    const eventId =
+      (typeof payload.val_id === 'string' ? payload.val_id : undefined) ||
+      transactionId ||
+      `EVENT-${Date.now()}`;
 
     const payment = await this.repo.findByTransactionId('SSLCOMMERZ', transactionId);
     if (!payment) {
@@ -337,7 +351,7 @@ export class PaymentsService {
     }
 
     // 3. Double-check with Order Validation API
-    const valId = payload.val_id;
+    const valId = typeof payload.val_id === 'string' ? payload.val_id : '';
     if (!valId) {
       throw AppError.badRequest('Missing val_id in IPN payload');
     }
@@ -398,10 +412,11 @@ export class PaymentsService {
       throw AppError.notFound('Order not found');
     }
 
+    const custSnapshot = order.customerSnapshot as Record<string, unknown> | null;
     const isOwner = actorContext.userId && order.customerId === actorContext.userId;
     const isGuestOwner =
       actorContext.guestToken &&
-      (order.customerSnapshot as any)?.guestToken === actorContext.guestToken;
+      custSnapshot?.guestToken === actorContext.guestToken;
 
     if (!isOwner && !isGuestOwner) {
       throw AppError.forbidden('You do not have permission to view payment status for this order');
@@ -436,6 +451,10 @@ export class PaymentsService {
     }
 
     const order = payment.order;
+    if (!order) {
+      throw AppError.notFound('Associated order not found for payment');
+    }
+
     if (order.status !== 'DELIVERED') {
       throw AppError.badRequest(
         `COD payment can only be collected after the order is DELIVERED (current status: '${order.status}')`,
@@ -674,6 +693,104 @@ export class PaymentsService {
       throw AppError.notFound('Payment not found');
     }
     return payment;
+  }
+
+  /**
+   * Automatically cancels unpaid orders exceeding payment deadline.
+   * Idempotently releases reserved stock and logs state transition.
+   */
+  async cancelExpiredUnpaidOrders(now: Date = new Date()): Promise<number> {
+    const expiredOrders = await prisma.order.findMany({
+      where: {
+        status: 'PENDING',
+        paymentStatus: { in: ['PENDING', 'INITIATED', 'FAILED'] },
+        OR: [
+          { paymentDeadline: { lte: now } },
+          {
+            paymentDeadline: null,
+            placedAt: {
+              lte: new Date(now.getTime() - env.ORDER_PAYMENT_TIMEOUT_HOURS * 60 * 60 * 1000),
+            },
+          },
+        ],
+      },
+      include: { items: true },
+    });
+
+    let cancelledCount = 0;
+
+    for (const order of expiredOrders) {
+      try {
+        await prisma.$transaction(async tx => {
+          // Re-verify order status inside transaction
+          const currentOrder = await tx.order.findUnique({
+            where: { id: order.id },
+            include: { items: true },
+          });
+
+          if (!currentOrder || currentOrder.status !== 'PENDING' || currentOrder.paymentStatus === 'PAID') {
+            return;
+          }
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              status: 'CANCELLED',
+              cancelledAt: now,
+              cancellationReason: 'Payment deadline expired',
+            },
+          });
+
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: order.id,
+              status: 'CANCELLED',
+              note: 'Payment deadline expired; auto-cancelled',
+            },
+          });
+
+          const defaultWarehouse = await tx.warehouse.findFirst({
+            where: { isDefault: true, isActive: true },
+          });
+          const warehouseId = defaultWarehouse?.id || 'WH-DHK-01';
+
+          for (const item of currentOrder.items) {
+            if (item.variantId) {
+              await inventoryService.releaseReservation(
+                {
+                  variantId: item.variantId,
+                  warehouseId,
+                  quantity: item.quantity,
+                  referenceType: 'ORDER',
+                  referenceId: currentOrder.orderNumber,
+                  reason: `Stock released due to payment deadline expiration (${currentOrder.orderNumber})`,
+                },
+                tx,
+              );
+            }
+          }
+
+          await tx.auditLog.create({
+            data: {
+              actorType: 'SYSTEM',
+              action: 'ORDER_AUTO_CANCELLED_UNPAID',
+              targetType: 'ORDER',
+              targetId: currentOrder.id,
+              metadata: {
+                orderNumber: currentOrder.orderNumber,
+                reason: 'Payment deadline expired',
+                cancelledAt: now.toISOString(),
+              },
+            },
+          });
+        });
+        cancelledCount++;
+      } catch (err: unknown) {
+        logger.error({ orderId: order.id, err }, 'Failed to cancel expired unpaid order');
+      }
+    }
+
+    return cancelledCount;
   }
 }
 

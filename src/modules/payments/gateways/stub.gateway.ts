@@ -26,11 +26,11 @@ export class StubGateway implements PaymentGateway {
     throw AppError.notImplemented(`Payment provider '${this.provider}' verification is not implemented`);
   }
 
-  async handleCallback(_payload: Record<string, any>): Promise<GatewayCallbackResult> {
+  async handleCallback(_payload: Record<string, unknown>): Promise<GatewayCallbackResult> {
     throw AppError.notImplemented(`Payment provider '${this.provider}' callbacks are not implemented`);
   }
 
-  async handleIpn(_payload: Record<string, any>): Promise<GatewayIpnResult> {
+  async handleIpn(_payload: Record<string, unknown>): Promise<GatewayIpnResult> {
     throw AppError.notImplemented(`Payment provider '${this.provider}' IPN is not implemented`);
   }
 

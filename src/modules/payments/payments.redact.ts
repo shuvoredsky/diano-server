@@ -11,7 +11,7 @@ const SENSITIVE_KEYS = new Set([
 /**
  * Recursively redacts sensitive credentials, passwords, and card details from payment payloads.
  */
-export function redactPaymentPayload(obj: any): any {
+export function redactPaymentPayload(obj: unknown): unknown {
   if (!obj || typeof obj !== 'object') {
     return obj;
   }
@@ -20,7 +20,7 @@ export function redactPaymentPayload(obj: any): any {
     return obj.map(item => redactPaymentPayload(item));
   }
 
-  const redacted: Record<string, any> = {};
+  const redacted: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
     const lowerKey = key.toLowerCase();

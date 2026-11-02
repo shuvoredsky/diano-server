@@ -127,7 +127,7 @@ describe.skipIf(!isTestDbAvailable)(
 
         expect(publicRes.status).toBe(200);
         const heroBanners = publicRes.body.data;
-        expect(heroBanners.some((b: any) => b.id === bannerId)).toBe(true);
+        expect(heroBanners.some((b: { id: string }) => b.id === bannerId)).toBe(true);
 
         // Toggle inactive
         const toggleRes = await request(app)
@@ -142,7 +142,7 @@ describe.skipIf(!isTestDbAvailable)(
           .get('/api/v1/public/banners')
           .query({ placement: 'HOME_HERO' });
 
-        expect(publicAfterToggle.body.data.some((b: any) => b.id === bannerId)).toBe(false);
+        expect(publicAfterToggle.body.data.some((b: { id: string }) => b.id === bannerId)).toBe(false);
       });
     });
 
@@ -200,7 +200,7 @@ describe.skipIf(!isTestDbAvailable)(
         // 6. Navigation list includes published page
         const navRes = await request(app).get('/api/v1/public/pages');
         expect(navRes.status).toBe(200);
-        expect(navRes.body.data.some((p: any) => p.slug === uniqueSlug)).toBe(true);
+        expect(navRes.body.data.some((p: { slug: string }) => p.slug === uniqueSlug)).toBe(true);
 
         // 7. Verify system page deletion block
         const systemTerms = await prisma.page.upsert({

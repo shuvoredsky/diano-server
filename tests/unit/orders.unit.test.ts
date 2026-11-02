@@ -8,6 +8,9 @@ import {
 import { fetchLogoBufferSafe, InvoiceService } from '@/modules/orders/invoice.service';
 import { OrdersService } from '@/modules/orders/orders.service';
 import type { OrderEntity } from '@/modules/orders/orders.types';
+import type { OrdersRepository } from '@/modules/orders/orders.repository';
+import type { IAuditService } from '@/services/audit.service';
+import type { InventoryService } from '@/modules/inventory/inventory.service';
 import { AppError } from '@/utils/app-error';
 import { formatInTimeZone } from 'date-fns-tz';
 
@@ -59,9 +62,10 @@ describe('Orders & Invoice Unit Tests', () => {
       expect(() => assertValidTransition('PENDING', 'DELIVERED')).toThrow(AppError);
       try {
         assertValidTransition('PENDING', 'DELIVERED');
-      } catch (err: any) {
-        expect(err.statusCode).toBe(409);
-        expect(err.message).toContain("Invalid order status transition from 'PENDING' to 'DELIVERED'");
+      } catch (err: unknown) {
+        const error = err as AppError;
+        expect(error.statusCode).toBe(409);
+        expect(error.message).toContain("Invalid order status transition from 'PENDING' to 'DELIVERED'");
       }
     });
 
@@ -99,7 +103,12 @@ describe('Orders & Invoice Unit Tests', () => {
   // ============================================================================
   describe('Idempotency & Pricing Validation', () => {
     it('should compute deterministic payload hash', () => {
-      const svc = new OrdersService({} as any, {} as any, {} as any, {} as any);
+      const svc = new OrdersService(
+        {} as unknown as OrdersRepository,
+        {} as unknown as IAuditService,
+        {} as unknown as InventoryService,
+        {} as unknown as InvoiceService,
+      );
       const hash1 = svc.generatePayloadHash('sess-123', 'Please call before delivery');
       const hash2 = svc.generatePayloadHash('sess-123', 'Please call before delivery');
       const hash3 = svc.generatePayloadHash('sess-123', 'Different note');
@@ -109,14 +118,24 @@ describe('Orders & Invoice Unit Tests', () => {
     });
 
     it('should reject order creation if Idempotency-Key header is missing', async () => {
-      const svc = new OrdersService({} as any, {} as any, {} as any, {} as any);
+      const svc = new OrdersService(
+        {} as unknown as OrdersRepository,
+        {} as unknown as IAuditService,
+        {} as unknown as InventoryService,
+        {} as unknown as InvoiceService,
+      );
       await expect(
         svc.createOrder({ checkoutSessionId: 'sess-1', idempotencyKey: '' }),
       ).rejects.toThrow('Valid Idempotency-Key header is required');
     });
 
     it('should sanitize costPrice when user lacks order:view_cost permission', () => {
-      const svc = new OrdersService({} as any, {} as any, {} as any, {} as any);
+      const svc = new OrdersService(
+        {} as unknown as OrdersRepository,
+        {} as unknown as IAuditService,
+        {} as unknown as InventoryService,
+        {} as unknown as InvoiceService,
+      );
       const mockOrder: OrderEntity = {
         id: 'ord-1',
         orderNumber: 'DN-261101-00001',
@@ -173,7 +192,12 @@ describe('Orders & Invoice Unit Tests', () => {
         }),
       };
 
-      const svc = new OrdersService(mockRepo as any, {} as any, {} as any, {} as any);
+      const svc = new OrdersService(
+        mockRepo as unknown as OrdersRepository,
+        {} as unknown as IAuditService,
+        {} as unknown as InventoryService,
+        {} as unknown as InvoiceService,
+      );
       const res = await svc.trackOrder('DN-261101-00001', '01712345678');
 
       expect(res).toEqual({
@@ -185,8 +209,8 @@ describe('Orders & Invoice Unit Tests', () => {
         shippingDistrict: 'Dhaka',
       });
       // Sensitive snapshots must NOT be exposed
-      expect((res as any).customerSnapshot).toBeUndefined();
-      expect((res as any).items).toBeUndefined();
+      expect((res as Record<string, unknown>).customerSnapshot).toBeUndefined();
+      expect((res as Record<string, unknown>).items).toBeUndefined();
     });
 
     it('should throw generic 404 error when phone or order does not match', async () => {
@@ -197,7 +221,12 @@ describe('Orders & Invoice Unit Tests', () => {
         }),
       };
 
-      const svc = new OrdersService(mockRepo as any, {} as any, {} as any, {} as any);
+      const svc = new OrdersService(
+        mockRepo as unknown as OrdersRepository,
+        {} as unknown as IAuditService,
+        {} as unknown as InventoryService,
+        {} as unknown as InvoiceService,
+      );
 
       // Wrong phone
       await expect(svc.trackOrder('DN-261101-00001', '01899999999')).rejects.toThrow(

@@ -9,7 +9,11 @@ import { SslcommerzGateway } from '@/modules/payments/gateways/sslcommerz.gatewa
 import { StubGateway } from '@/modules/payments/gateways/stub.gateway';
 import { PaymentGatewayRegistry } from '@/modules/payments/gateways/gateway.registry';
 import { PaymentsService } from '@/modules/payments/payments.service';
+import type { PaymentsRepository } from '@/modules/payments/payments.repository';
+import type { PaymentGateway, GatewayInitializeInput } from '@/modules/payments/payments.types';
 import { prisma } from '@/config/database';
+import Decimal from 'decimal.js';
+import type { Prisma } from '@prisma/client';
 
 describe('Payments Unit Test Suite', () => {
   describe('Payment State Machine', () => {
@@ -110,11 +114,11 @@ describe('Payments Unit Test Suite', () => {
       const nagadStub = new StubGateway('NAGAD');
 
       await expect(
-        bkashStub.initialize({} as any),
+        bkashStub.initialize({} as unknown as GatewayInitializeInput),
       ).rejects.toThrow(/is not yet implemented \(scheduled for M10b\)/);
-      await expect(nagadStub.initialize({} as any)).rejects.toThrow(
-        /is not yet implemented \(scheduled for M10b\)/,
-      );
+      await expect(
+        nagadStub.initialize({} as unknown as GatewayInitializeInput),
+      ).rejects.toThrow(/is not yet implemented \(scheduled for M10b\)/);
     });
   });
 
@@ -128,7 +132,7 @@ describe('Payments Unit Test Suite', () => {
     });
 
     it('verifies valid IPN cryptographic MD5 signature following official doc algorithm', () => {
-      const postData: Record<string, any> = {
+      const postData: Record<string, string> = {
         tran_id: 'DN-TEST-TRAN-01',
         val_id: 'VAL_TEST_123',
         amount: '1500.00',
@@ -161,25 +165,46 @@ describe('Payments Unit Test Suite', () => {
       expect(isAuthentic).toBe(true);
     });
 
-    it('rejects tampered or forged IPN signatures', () => {
-      const postData: Record<string, any> = {
+    it('rejects tampered or forged IPN signatures of same length', () => {
+      const postData: Record<string, unknown> = {
         tran_id: 'DN-TEST-TRAN-01',
         val_id: 'VAL_TEST_123',
         amount: '1500.00',
         currency: 'BDT',
         status: 'VALID',
         verify_key: 'amount,currency,status,tran_id,val_id',
-        verify_sign: 'invalid_forged_md5_hash_1234567890abcdef',
+        verify_sign: '0123456789abcdef0123456789abcdef',
       };
 
       const isAuthentic = gateway.verifyIpnSignature(postData);
       expect(isAuthentic).toBe(false);
     });
+
+    it('rejects IPN signature with mismatched length safely via timingSafeEqual length guard', () => {
+      const postData: Record<string, unknown> = {
+        tran_id: 'DN-TEST-TRAN-01',
+        val_id: 'VAL_TEST_123',
+        amount: '1500.00',
+        currency: 'BDT',
+        status: 'VALID',
+        verify_key: 'amount,currency,status,tran_id,val_id',
+        verify_sign: 'short_sig',
+      };
+
+      const isAuthentic = gateway.verifyIpnSignature(postData);
+      expect(isAuthentic).toBe(false);
+    });
+
+    it('rejects IPN with missing verify_sign or verify_key', () => {
+      expect(gateway.verifyIpnSignature({})).toBe(false);
+      expect(gateway.verifyIpnSignature({ verify_sign: 'abc' })).toBe(false);
+      expect(gateway.verifyIpnSignature({ verify_key: 'amount' })).toBe(false);
+    });
   });
 
   describe('Payments Service Business Logic', () => {
-    let mockRepo: any;
-    let mockGateway: any;
+    let mockRepo: Record<string, ReturnType<typeof vi.fn>>;
+    let mockGateway: Record<string, ReturnType<typeof vi.fn>>;
     let service: PaymentsService;
 
     beforeEach(() => {
@@ -211,9 +236,9 @@ describe('Payments Unit Test Suite', () => {
       };
 
       const registry = new PaymentGatewayRegistry();
-      registry.registerGateway('SSLCOMMERZ', mockGateway);
+      registry.registerGateway('SSLCOMMERZ', mockGateway as unknown as PaymentGateway);
 
-      service = new PaymentsService(mockRepo, registry);
+      service = new PaymentsService(mockRepo as unknown as PaymentsRepository, registry);
     });
 
     it('rejects payment callback with unknown transaction ID without marking paid', async () => {
@@ -319,11 +344,11 @@ describe('Payments Unit Test Suite', () => {
         status: 'PENDING',
         paymentStatus: 'PENDING',
         paymentMethod: 'SSLCOMMERZ',
-        grandTotal: 1200 as any,
+        grandTotal: new Decimal(1200),
         customerSnapshot: {},
         shippingAddressSnapshot: {},
         items: [],
-      } as any);
+      } as unknown as Prisma.OrderGetPayload<{ include: { items: true; customer: true } }>);
 
       // Active attempt exists!
       mockRepo.findAllByOrderId.mockResolvedValue([

@@ -25,6 +25,7 @@ if (
 
 describe.skipIf(!isTestDbAvailable)(
   'Payments Integration Tests (Real Neon DB)',
+  { timeout: 60000 },
   () => {
     let testAdminUserId: string;
     let defaultWarehouseId: string;
@@ -36,6 +37,9 @@ describe.skipIf(!isTestDbAvailable)(
     const createdOrderIds: string[] = [];
     const createdPaymentIds: string[] = [];
     const createdUserIds: string[] = [];
+    const createdCategoryIds: string[] = [];
+    const createdProductIds: string[] = [];
+    const createdVariantIds: string[] = [];
 
     // Mock Gateway for testing HTTP callbacks without hitting live SSLCOMMERZ servers
     let mockSslGateway: PaymentGateway;
@@ -169,6 +173,7 @@ describe.skipIf(!isTestDbAvailable)(
         await prisma.paymentEvent.deleteMany({ where: { payment: { orderId: { in: createdOrderIds } } } }).catch(() => {});
         await prisma.payment.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+        await prisma.orderNote.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } }).catch(() => {});
       }
@@ -189,6 +194,25 @@ describe.skipIf(!isTestDbAvailable)(
       if (testCategoryId) {
         await prisma.category.updateMany({
           where: { id: testCategoryId },
+          data: { deletedAt: new Date() },
+        }).catch(() => {});
+      }
+      if (createdVariantIds.length > 0) {
+        await prisma.inventory.deleteMany({ where: { variantId: { in: createdVariantIds } } }).catch(() => {});
+        await prisma.productVariant.updateMany({
+          where: { id: { in: createdVariantIds } },
+          data: { deletedAt: new Date() },
+        }).catch(() => {});
+      }
+      if (createdProductIds.length > 0) {
+        await prisma.product.updateMany({
+          where: { id: { in: createdProductIds } },
+          data: { deletedAt: new Date() },
+        }).catch(() => {});
+      }
+      if (createdCategoryIds.length > 0) {
+        await prisma.category.updateMany({
+          where: { id: { in: createdCategoryIds } },
           data: { deletedAt: new Date() },
         }).catch(() => {});
       }
@@ -271,7 +295,7 @@ describe.skipIf(!isTestDbAvailable)(
       const valId = `VAL-${transactionId}`;
 
       // Mock gateway verification to return valid BDT 2000
-      (mockSslGateway.verify as any).mockResolvedValue({
+      vi.spyOn(mockSslGateway, 'verify').mockResolvedValue({
         isValid: true,
         status: 'VALID',
         transactionId,
@@ -383,7 +407,7 @@ describe.skipIf(!isTestDbAvailable)(
       const transactionId = initRes.transactionId;
       const valId = `VAL-${transactionId}`;
 
-      (mockSslGateway.verify as any).mockResolvedValue({
+      vi.spyOn(mockSslGateway, 'verify').mockResolvedValue({
         isValid: true,
         status: 'VALID',
         transactionId,
@@ -434,7 +458,7 @@ describe.skipIf(!isTestDbAvailable)(
       const transactionId = initRes.transactionId;
 
       // Gateway reports status VALID but amount is manipulated to 50 BDT instead of 2000 BDT
-      (mockSslGateway.verify as any).mockResolvedValue({
+      vi.spyOn(mockSslGateway, 'verify').mockResolvedValue({
         isValid: true,
         status: 'VALID',
         transactionId,
@@ -520,6 +544,365 @@ describe.skipIf(!isTestDbAvailable)(
       expect(listRes.body.success).toBe(true);
       expect(Array.isArray(listRes.body.data)).toBe(true);
       expect(listRes.body.meta.pagination.totalItems).toBeGreaterThan(0);
+    });
+
+    it('Payment Fail -> Retry Restock: successfully re-reserves stock when retrying after a failed attempt', async () => {
+      // 1. Create product and inventory
+      const cat = await prisma.category.create({
+        data: { name: `RetryCat-${Date.now()}`, slug: `retry-cat-${Date.now()}`, isActive: true },
+      });
+      createdCategoryIds.push(cat.id);
+      const prod = await prisma.product.create({
+        data: {
+          name: `Retry Product ${Date.now()}`,
+          slug: `retry-prod-${Date.now()}`,
+          description: 'Retry Product Description',
+          categoryId: cat.id,
+          status: 'PUBLISHED',
+          inventoryType: 'READY_STOCK',
+        },
+      });
+      createdProductIds.push(prod.id);
+      const variant = await prisma.productVariant.create({
+        data: {
+          productId: prod.id,
+          sku: `SKU-RETRY-${Date.now()}`,
+          name: 'Retry Variant',
+          price: 1200.0,
+          isActive: true,
+        },
+      });
+      createdVariantIds.push(variant.id);
+      await prisma.inventory.create({
+        data: {
+          variantId: variant.id,
+          warehouseId: defaultWarehouseId,
+          onHand: 10,
+          reserved: 2, // Reserved by initial order placement
+        },
+      });
+
+      // 2. Create order
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: `DN-RETRY-${Date.now()}`,
+          customerId: testCustomerId,
+          status: 'PENDING',
+          paymentStatus: 'PENDING',
+          paymentMethod: 'SSLCOMMERZ',
+          subtotal: 2400.0,
+          grandTotal: 2400.0,
+          customerSnapshot: { id: testCustomerId, name: 'Retry User', phone: '01711111111' },
+          shippingAddressSnapshot: { address1: 'Dhanmondi', city: 'Dhaka' },
+          items: {
+            create: [
+              {
+                variantId: variant.id,
+                productName: prod.name,
+                variantName: variant.name,
+                sku: variant.sku,
+                unitPrice: 1200.0,
+                quantity: 2,
+                lineTotal: 2400.0,
+              },
+            ],
+          },
+        },
+        include: { items: true },
+      });
+      createdOrderIds.push(order.id);
+
+      // 3. First payment attempt fails -> releases reserved stock
+      const firstPayment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: 'SSLCOMMERZ',
+          status: 'PENDING',
+          amount: 2400.0,
+          currency: 'BDT',
+          transactionId: `${order.orderNumber}-P1`,
+        },
+      });
+      createdPaymentIds.push(firstPayment.id);
+
+      await paymentsService.handleSslCallback('fail', {
+        tran_id: firstPayment.transactionId,
+        error: 'Customer cancelled transaction',
+      });
+
+      // Stock reservation should now be released (reserved = 0)
+      const invAfterFail = await prisma.inventory.findUniqueOrThrow({
+        where: { variantId_warehouseId: { variantId: variant.id, warehouseId: defaultWarehouseId } },
+      });
+      expect(invAfterFail.reserved).toBe(0);
+
+      // 4. Customer retries payment -> initiatePayment re-reserves stock
+      const retryResult = await paymentsService.initiatePayment(
+        { orderId: order.id },
+        { userId: testCustomerId, actorType: 'USER' },
+      );
+
+      expect(retryResult.transactionId).toContain('-P2-');
+
+      // Stock reservation should now be re-reserved (reserved = 2)
+      const invAfterRetry = await prisma.inventory.findUniqueOrThrow({
+        where: { variantId_warehouseId: { variantId: variant.id, warehouseId: defaultWarehouseId } },
+      });
+      expect(invAfterRetry.reserved).toBe(2);
+    });
+
+    it('Payment Retry: rejects retry with clear error if inventory is insufficient during retry', async () => {
+      // 1. Create product and variant
+      const cat = await prisma.category.create({
+        data: { name: `InsuffCat-${Date.now()}`, slug: `insuff-cat-${Date.now()}`, isActive: true },
+      });
+      createdCategoryIds.push(cat.id);
+      const prod = await prisma.product.create({
+        data: {
+          name: `Insuff Stock Product ${Date.now()}`,
+          slug: `insuff-prod-${Date.now()}`,
+          description: 'Insuff Stock Product Description',
+          categoryId: cat.id,
+          status: 'PUBLISHED',
+          inventoryType: 'READY_STOCK',
+        },
+      });
+      createdProductIds.push(prod.id);
+      const variant = await prisma.productVariant.create({
+        data: {
+          productId: prod.id,
+          sku: `SKU-INSUFF-${Date.now()}`,
+          name: 'Insuff Variant',
+          price: 1000.0,
+          isActive: true,
+        },
+      });
+      createdVariantIds.push(variant.id);
+      await prisma.inventory.create({
+        data: {
+          variantId: variant.id,
+          warehouseId: defaultWarehouseId,
+          onHand: 5,
+          reserved: 0,
+        },
+      });
+
+      // 2. Order for 5 units
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: `DN-INSUFF-${Date.now()}`,
+          customerId: testCustomerId,
+          status: 'PENDING',
+          paymentStatus: 'FAILED',
+          paymentMethod: 'SSLCOMMERZ',
+          subtotal: 5000.0,
+          grandTotal: 5000.0,
+          customerSnapshot: { id: testCustomerId, name: 'Insuff User', phone: '01722222222' },
+          shippingAddressSnapshot: { address1: 'Banani', city: 'Dhaka' },
+          items: {
+            create: [
+              {
+                variantId: variant.id,
+                productName: prod.name,
+                variantName: variant.name,
+                sku: variant.sku,
+                unitPrice: 1000.0,
+                quantity: 5,
+                lineTotal: 5000.0,
+              },
+            ],
+          },
+        },
+        include: { items: true },
+      });
+      createdOrderIds.push(order.id);
+
+      // Create previous failed payment
+      const failedPayment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: 'SSLCOMMERZ',
+          status: 'FAILED',
+          amount: 5000.0,
+          currency: 'BDT',
+          transactionId: `${order.orderNumber}-P1`,
+        },
+      });
+      createdPaymentIds.push(failedPayment.id);
+
+      // Reduce stock so only 3 remain on hand (less than order's 5)
+      await prisma.inventory.update({
+        where: { variantId_warehouseId: { variantId: variant.id, warehouseId: defaultWarehouseId } },
+        data: { onHand: 3 },
+      });
+
+      // 3. Attempting retry should fail cleanly with insufficient stock error
+      await expect(
+        paymentsService.initiatePayment(
+          { orderId: order.id },
+          { userId: testCustomerId, actorType: 'USER' },
+        ),
+      ).rejects.toThrow(/Insufficient stock to retry payment/);
+
+      // Verify no stock was reserved
+      const invCheck = await prisma.inventory.findUniqueOrThrow({
+        where: { variantId_warehouseId: { variantId: variant.id, warehouseId: defaultWarehouseId } },
+      });
+      expect(invCheck.reserved).toBe(0);
+    });
+
+    it('Expired Orders: cancelExpiredUnpaidOrders auto-cancels order past paymentDeadline and releases stock', async () => {
+      // 1. Create product and inventory with 3 reserved
+      const cat = await prisma.category.create({
+        data: { name: `ExpCat-${Date.now()}`, slug: `exp-cat-${Date.now()}`, isActive: true },
+      });
+      createdCategoryIds.push(cat.id);
+      const prod = await prisma.product.create({
+        data: {
+          name: `Exp Product ${Date.now()}`,
+          slug: `exp-prod-${Date.now()}`,
+          description: 'Exp Product Description',
+          categoryId: cat.id,
+          status: 'PUBLISHED',
+          inventoryType: 'READY_STOCK',
+        },
+      });
+      createdProductIds.push(prod.id);
+      const variant = await prisma.productVariant.create({
+        data: {
+          productId: prod.id,
+          sku: `SKU-EXP-${Date.now()}`,
+          name: 'Exp Variant',
+          price: 800.0,
+          isActive: true,
+        },
+      });
+      createdVariantIds.push(variant.id);
+      await prisma.inventory.create({
+        data: {
+          variantId: variant.id,
+          warehouseId: defaultWarehouseId,
+          onHand: 10,
+          reserved: 3,
+        },
+      });
+
+      // 2. Order created with payment deadline 2 hours in the past
+      const pastDeadline = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: `DN-EXP-${Date.now()}`,
+          customerId: testCustomerId,
+          status: 'PENDING',
+          paymentStatus: 'PENDING',
+          paymentMethod: 'SSLCOMMERZ',
+          subtotal: 2400.0,
+          grandTotal: 2400.0,
+          paymentDeadline: pastDeadline,
+          customerSnapshot: { id: testCustomerId, name: 'Expired User', phone: '01733333333' },
+          shippingAddressSnapshot: { address1: 'Uttara', city: 'Dhaka' },
+          items: {
+            create: [
+              {
+                variantId: variant.id,
+                productName: prod.name,
+                variantName: variant.name,
+                sku: variant.sku,
+                unitPrice: 800.0,
+                quantity: 3,
+                lineTotal: 2400.0,
+              },
+            ],
+          },
+        },
+      });
+      createdOrderIds.push(order.id);
+
+      // 3. Run auto-cancel routine
+      const cancelledCount = await paymentsService.cancelExpiredUnpaidOrders(new Date());
+      expect(cancelledCount).toBeGreaterThanOrEqual(1);
+
+      // Verify order is now CANCELLED
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('CANCELLED');
+      expect(updatedOrder.cancellationReason).toBe('Payment deadline expired');
+
+      // Verify stock reservation was released (reserved = 0)
+      const invAfterCancel = await prisma.inventory.findUniqueOrThrow({
+        where: { variantId_warehouseId: { variantId: variant.id, warehouseId: defaultWarehouseId } },
+      });
+      expect(invAfterCancel.reserved).toBe(0);
+    });
+
+    it('Late IPN: verified PAID on CANCELLED order marks payment PAID but does NOT confirm order and adds FLAGGED note', async () => {
+      // 1. Create cancelled order
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: `DN-LATE-${Date.now()}`,
+          customerId: testCustomerId,
+          status: 'CANCELLED',
+          paymentStatus: 'FAILED',
+          paymentMethod: 'SSLCOMMERZ',
+          subtotal: 3000.0,
+          grandTotal: 3000.0,
+          cancellationReason: 'Customer manually cancelled',
+          customerSnapshot: { id: testCustomerId, name: 'Late IPN User', phone: '01744444444' },
+          shippingAddressSnapshot: { address1: 'Gulshan', city: 'Dhaka' },
+        },
+      });
+      createdOrderIds.push(order.id);
+
+      const transactionId = `TRAN-LATE-${Date.now()}`;
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: 'SSLCOMMERZ',
+          status: 'PENDING',
+          amount: 3000.0,
+          currency: 'BDT',
+          transactionId,
+        },
+      });
+      createdPaymentIds.push(payment.id);
+
+      // Mock gateway validation to succeed
+      vi.spyOn(mockSslGateway, 'verify').mockResolvedValue({
+        isValid: true,
+        status: 'VALID',
+        transactionId,
+        amount: 3000.0,
+        currency: 'BDT',
+        bankTranId: 'BANK-LATE-123',
+      });
+
+      // 2. Handle late callback
+      const callbackResult = await paymentsService.handleSslCallback('success', {
+        tran_id: transactionId,
+        val_id: 'VAL-LATE-123',
+      });
+
+      expect(callbackResult.redirectUrl).toContain('status=success');
+
+      // 3. Verify Payment is marked PAID (money received)
+      const updatedPayment = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+      expect(updatedPayment.status).toBe('PAID');
+      expect(updatedPayment.bankTranId).toBe('BANK-LATE-123');
+
+      // 4. Verify Order remains CANCELLED (never auto-confirmed!)
+      const verifiedOrder = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+        include: { orderNotes: true, statusHistory: true },
+      });
+      expect(verifiedOrder.status).toBe('CANCELLED');
+      expect(verifiedOrder.paymentStatus).toBe('PAID');
+
+      // 5. Verify FLAGGED refund-needed notes exist
+      const flaggedNote = verifiedOrder.orderNotes.find(n => n.note.includes('FLAGGED'));
+      expect(flaggedNote).toBeDefined();
+      expect(flaggedNote?.note).toContain('Refund required');
+
+      const flaggedHistory = verifiedOrder.statusHistory.find(h => (h.note || '').includes('FLAGGED'));
+      expect(flaggedHistory).toBeDefined();
     });
   },
 );

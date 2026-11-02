@@ -23,7 +23,7 @@ export class PaymentsController {
         (req.headers['x-guest-token'] as string) || body.guestToken;
 
       const result = await this.service.initiatePayment(body, {
-        userId: req.user?.userId || (req.user as any)?.id,
+        userId: req.user?.userId,
         guestToken,
       });
 
@@ -95,7 +95,7 @@ export class PaymentsController {
       const guestToken = req.headers['x-guest-token'] as string;
 
       const result = await this.service.getPaymentStatus(orderId, {
-        userId: req.user?.userId || (req.user as any)?.id,
+        userId: req.user?.userId,
         guestToken,
       });
 
@@ -147,7 +147,7 @@ export class PaymentsController {
    */
   refundPayment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const actorId = req.user?.userId || (req.user as any)?.id;
+      const actorId = req.user?.userId;
       if (!actorId) {
         throw AppError.unauthorized('Authentication required');
       }
@@ -167,7 +167,7 @@ export class PaymentsController {
    */
   markCodCollected = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const actorId = req.user?.userId || (req.user as any)?.id;
+      const actorId = req.user?.userId;
       if (!actorId) {
         throw AppError.unauthorized('Authentication required');
       }

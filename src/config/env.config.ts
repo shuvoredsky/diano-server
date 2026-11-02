@@ -50,6 +50,8 @@ const envSchema = z.object({
   // Business Defaults
   DEFAULT_CURRENCY: z.string().default('BDT'),
   DEFAULT_TIMEZONE: z.string().default('Asia/Dhaka'),
+  ORDER_PAYMENT_TIMEOUT_HOURS: z.coerce.number().positive().default(24),
+  ORDER_RETURN_WINDOW_DAYS: z.coerce.number().positive().default(7),
 
   // External Integrations (Optional)
   STORAGE_DRIVER: z.enum(['local', 'cloudinary']).default('local'),

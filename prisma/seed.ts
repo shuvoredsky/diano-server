@@ -7,10 +7,14 @@ import { SYSTEM_ROLES } from '../src/constants/roles';
 
 dotenv.config();
 
-// Initialize DB client using PrismaPg adapter (Prisma 7 requirement)
+const seedDbUrl =
+  (process.env.NODE_ENV === 'test' && process.env.TEST_DATABASE_URL)
+    ? process.env.TEST_DATABASE_URL
+    : process.env.DATABASE_URL;
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  connectionTimeoutMillis: 10000,
+  connectionString: seedDbUrl,
+  connectionTimeoutMillis: 20000,
 });
 
 const adapter = new PrismaPg(pool);
@@ -62,7 +66,11 @@ export const permissionsData = [
   // Payments & Refunds
   { resource: 'payment', action: 'read', name: 'Read Payments', slug: 'payment:read', description: 'View payment transactions' },
   { resource: 'payment', action: 'verify', name: 'Verify Payments', slug: 'payment:verify', description: 'Verify gateway IPN callbacks' },
+  { resource: 'payment', action: 'manage', name: 'Manage Payments', slug: 'payment:manage', description: 'Operational control over payment transactions' },
+  { resource: 'payment', action: 'refund', name: 'Refund Payments', slug: 'payment:refund', description: 'Authorize and initiate customer refunds' },
+  { resource: 'refund', action: 'read', name: 'Read Refunds', slug: 'refund:read', description: 'View customer refund records' },
   { resource: 'refund', action: 'approve', name: 'Approve Refunds', slug: 'refund:approve', description: 'Approve and process customer refunds' },
+  { resource: 'refund', action: 'manage', name: 'Manage Refunds', slug: 'refund:manage', description: 'Full operational control over refund issuance' },
 
   // Shipping
   { resource: 'shipping', action: 'read', name: 'Read Shipping', slug: 'shipping:read', description: 'View shipments and tracking' },
@@ -76,12 +84,14 @@ export const permissionsData = [
   // Fraud Detection
   { resource: 'fraud', action: 'read', name: 'Read Fraud Assessments', slug: 'fraud:read', description: 'View fraud scores and assessments' },
   { resource: 'fraud', action: 'review', name: 'Review Fraud Flags', slug: 'fraud:review', description: 'Approve or reject flagged orders' },
-  { resource: 'fraud', action: 'rule_manage', name: 'Manage Fraud Rules', slug: 'fraud:rule_manage', description: 'Configure scoring rules' },
+  { resource: 'fraud', action: 'manage', name: 'Manage Fraud Rules', slug: 'fraud:manage', description: 'Configure scoring rules and thresholds' },
+  { resource: 'fraud', action: 'rule_manage', name: 'Manage Fraud Rules Legacy', slug: 'fraud:rule_manage', description: 'Configure scoring rules' },
 
   // Returns
   { resource: 'return', action: 'read', name: 'Read Returns', slug: 'return:read', description: 'View return requests' },
   { resource: 'return', action: 'approve', name: 'Approve Returns', slug: 'return:approve', description: 'Approve or reject return requests' },
   { resource: 'return', action: 'inspect', name: 'Inspect Returns', slug: 'return:inspect', description: 'Record item return conditions' },
+  { resource: 'return', action: 'manage', name: 'Manage Returns', slug: 'return:manage', description: 'Full operational control over customer returns' },
 
   // Reviews
   { resource: 'review', action: 'read', name: 'Read Reviews', slug: 'review:read', description: 'Read customer reviews' },
@@ -111,11 +121,6 @@ export const permissionsData = [
   { resource: 'order', action: 'ship', name: 'Ship Orders', slug: 'order:ship', description: 'Mark orders as shipped and dispatch' },
   { resource: 'order', action: 'manage', name: 'Manage Orders', slug: 'order:manage', description: 'Full operational management over orders' },
   { resource: 'order', action: 'view_cost', name: 'View Order Costs & Margins', slug: 'order:view_cost', description: 'View confidential costPrice and gross margins on orders' },
-
-  // Payment Permissions
-  { resource: 'payment', action: 'read', name: 'Read Payments', slug: 'payment:read', description: 'View payment transactions and statuses' },
-  { resource: 'payment', action: 'manage', name: 'Manage Payments', slug: 'payment:manage', description: 'Operational control over payment transactions' },
-  { resource: 'payment', action: 'refund', name: 'Refund Payments', slug: 'payment:refund', description: 'Authorize and initiate customer refunds' },
 ];
 
 export const rolesData = SYSTEM_ROLES;
@@ -171,41 +176,19 @@ export async function seedDatabase() {
   // 3. Seed Role-Permission Mappings
   // eslint-disable-next-line no-console
   console.info('Assigning permissions to roles...');
+  const rolePermissionRows: Array<{ roleId: string; permissionId: string }> = [];
+
   const superAdminRoleId = roleMap.get('super-admin');
   if (superAdminRoleId) {
     for (const permId of permissionMap.values()) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: superAdminRoleId,
-            permissionId: permId,
-          },
-        },
-        update: {},
-        create: {
-          roleId: superAdminRoleId,
-          permissionId: permId,
-        },
-      });
+      rolePermissionRows.push({ roleId: superAdminRoleId, permissionId: permId });
     }
   }
 
   const adminRoleId = roleMap.get('admin');
   if (adminRoleId) {
     for (const permId of permissionMap.values()) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: adminRoleId,
-            permissionId: permId,
-          },
-        },
-        update: {},
-        create: {
-          roleId: adminRoleId,
-          permissionId: permId,
-        },
-      });
+      rolePermissionRows.push({ roleId: adminRoleId, permissionId: permId });
     }
   }
 
@@ -223,9 +206,12 @@ export async function seedDatabase() {
       'order:confirm',
       'order:ship',
       'order:cancel',
-      'shipping:read',
-      'coupon:read',
-      'coupon:manage',
+      'shipping:',
+      'coupon:',
+      'fraud:read',
+      'fraud:review',
+      'return:',
+      'refund:',
       'review:read',
       'review:moderate',
       'analytics:view',
@@ -238,21 +224,36 @@ export async function seedDatabase() {
     ];
     for (const [slug, permId] of permissionMap.entries()) {
       if (managerAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
-        await prisma.rolePermission.upsert({
-          where: {
-            roleId_permissionId: {
-              roleId: managerRoleId,
-              permissionId: permId,
-            },
-          },
-          update: {},
-          create: {
-            roleId: managerRoleId,
-            permissionId: permId,
-          },
-        });
+        rolePermissionRows.push({ roleId: managerRoleId, permissionId: permId });
       }
     }
+  }
+
+  const orderManagerRoleId = roleMap.get('order-manager');
+  if (orderManagerRoleId) {
+    const orderManagerAllowedPrefixes = [
+      'order:',
+      'shipping:',
+      'coupon:read',
+      'fraud:read',
+      'fraud:review',
+      'return:',
+      'refund:',
+      'payment:read',
+      'inventory:read',
+    ];
+    for (const [slug, permId] of permissionMap.entries()) {
+      if (orderManagerAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
+        rolePermissionRows.push({ roleId: orderManagerRoleId, permissionId: permId });
+      }
+    }
+  }
+
+  if (rolePermissionRows.length > 0) {
+    await prisma.rolePermission.createMany({
+      data: rolePermissionRows,
+      skipDuplicates: true,
+    });
   }
 
   // 4. Seed Default Central Warehouse

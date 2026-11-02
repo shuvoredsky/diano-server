@@ -8,6 +8,7 @@ import { invoiceService } from '@/modules/orders/invoice.service';
 import { productsRepository } from '@/modules/products/products.repository';
 import { productsService } from '@/modules/products/products.service';
 import { siteSettingsService } from '@/modules/site-settings/site-settings.service';
+import type { Prisma } from '@prisma/client';
 import type { CheckoutCartSnapshot } from '@/modules/checkout/checkout.types';
 
 const isTestDbAvailable = Boolean(
@@ -193,7 +194,7 @@ describe.skipIf(!isTestDbAvailable)(
         data: {
           sessionId,
           status: 'ACTIVE',
-          cartSnapshot: cartSnapshot as unknown as any,
+          cartSnapshot: cartSnapshot as unknown as Prisma.InputJsonValue,
           checkoutValue: 1200 * quantity + 60,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         },
@@ -465,7 +466,7 @@ describe.skipIf(!isTestDbAvailable)(
       const initialSnapshot = await prisma.orderInvoiceSnapshot.findUniqueOrThrow({
         where: { orderId: order.id },
       });
-      const originalStoreName = (initialSnapshot.storeProfile as any).storeName;
+      const originalStoreName = (initialSnapshot.storeProfile as Record<string, unknown>).storeName;
 
       // 3. Mutate the active store settings in DB
       await siteSettingsService.updateSettingGroup(

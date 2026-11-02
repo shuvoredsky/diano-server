@@ -3,6 +3,7 @@ import Decimal from 'decimal.js';
 import { prisma } from '@/config/database';
 import { Prisma } from '@prisma/client';
 import { AppError } from '@/utils/app-error';
+import { env } from '@/config/env.config';
 import { formatInTimeZone } from 'date-fns-tz';
 import { defaultShippingCalculator } from '@/modules/checkout/checkout.shipping';
 import { defaultCouponCalculator } from '@/modules/checkout/checkout.coupon';
@@ -17,7 +18,85 @@ import type {
   CreateOrderInput,
   OrderFilter,
   PaymentProvider,
+  OrderStatus,
+  PaymentStatus,
+  CustomerSnapshot,
+  ShippingAddressSnapshot,
+  BillingAddressSnapshot,
 } from './orders.types';
+
+export type RawOrderRow = {
+  id: string;
+  orderNumber: string;
+  idempotencyKey?: string | null;
+  customerId?: string | null;
+  status: OrderStatus;
+  subtotal: { toString(): string };
+  discountTotal: { toString(): string };
+  shippingTotal: { toString(): string };
+  taxTotal: { toString(): string };
+  grandTotal: { toString(): string };
+  paymentStatus: PaymentStatus;
+  paymentMethod: PaymentProvider;
+  shippingAddressSnapshot: unknown;
+  billingAddressSnapshot: unknown;
+  customerSnapshot: unknown;
+  couponId?: string | null;
+  notes?: string | null;
+  placedAt: Date;
+  paymentDeadline?: Date | null;
+  confirmedAt?: Date | null;
+  shippedAt?: Date | null;
+  deliveredAt?: Date | null;
+  cancelledAt?: Date | null;
+  cancellationReason?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: Array<{
+    id: string;
+    variantId?: string | null;
+    productName: string;
+    variantName?: string | null;
+    sku: string;
+    unitPrice: { toString(): string };
+    costPrice?: { toString(): string } | null;
+    quantity: number;
+    discount: { toString(): string };
+    lineTotal: { toString(): string };
+    attributesSnapshot?: unknown;
+  }>;
+  statusHistory?: Array<{
+    id: string;
+    status: OrderStatus;
+    changedById?: string | null;
+    note?: string | null;
+    createdAt: Date;
+  }>;
+  orderNotes?: Array<{
+    id: string;
+    authorId?: string | null;
+    note: string;
+    isCustomerVisible: boolean;
+    createdAt: Date;
+  }>;
+  payments?: Array<{
+    id: string;
+    provider: PaymentProvider;
+    status: PaymentStatus;
+    amount: { toString(): string };
+    currency: string;
+    transactionId?: string | null;
+    paidAt?: Date | null;
+    createdAt: Date;
+  }>;
+  invoiceSnapshot?: {
+    id: string;
+    invoiceNumber: string;
+    storeProfile: unknown;
+    invoiceSettings: unknown;
+    issuedAt: Date;
+  } | null;
+};
 
 export class OrdersRepository {
   /**
@@ -42,12 +121,12 @@ export class OrdersRepository {
   /**
    * Formats raw Prisma Order row to strongly typed OrderEntity
    */
-  formatOrder(row: any): OrderEntity {
+  formatOrder(row: RawOrderRow): OrderEntity {
     return {
       id: row.id,
       orderNumber: row.orderNumber,
       idempotencyKey: row.idempotencyKey,
-      customerId: row.customerId,
+      customerId: row.customerId ?? null,
       status: row.status,
       subtotal: row.subtotal.toString(),
       discountTotal: row.discountTotal.toString(),
@@ -56,12 +135,22 @@ export class OrdersRepository {
       grandTotal: row.grandTotal.toString(),
       paymentStatus: row.paymentStatus,
       paymentMethod: row.paymentMethod,
-      shippingAddressSnapshot: row.shippingAddressSnapshot,
-      billingAddressSnapshot: row.billingAddressSnapshot,
-      customerSnapshot: row.customerSnapshot,
+      shippingAddressSnapshot: (row.shippingAddressSnapshot as unknown as ShippingAddressSnapshot) ?? {
+        address: '',
+        district: '',
+        area: '',
+      },
+      billingAddressSnapshot: (row.billingAddressSnapshot as unknown as BillingAddressSnapshot | null) ?? null,
+      customerSnapshot: (row.customerSnapshot as unknown as CustomerSnapshot) ?? {
+        id: '',
+        name: '',
+        phone: '',
+        isGuest: true,
+      },
       couponId: row.couponId,
       notes: row.notes,
       placedAt: row.placedAt,
+      paymentDeadline: row.paymentDeadline,
       confirmedAt: row.confirmedAt,
       shippedAt: row.shippedAt,
       deliveredAt: row.deliveredAt,
@@ -69,34 +158,34 @@ export class OrdersRepository {
       cancellationReason: row.cancellationReason,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      items: (row.items || []).map((item: any): OrderItemSnapshot => ({
+      items: (row.items || []).map((item): OrderItemSnapshot => ({
         id: item.id,
         variantId: item.variantId,
         productName: item.productName,
-        variantName: item.variantName,
+        variantName: item.variantName || '',
         sku: item.sku,
         unitPrice: item.unitPrice.toString(),
         costPrice: item.costPrice ? item.costPrice.toString() : null,
         quantity: item.quantity,
         discount: item.discount.toString(),
         lineTotal: item.lineTotal.toString(),
-        attributesSnapshot: item.attributesSnapshot,
+        attributesSnapshot: item.attributesSnapshot as Record<string, unknown> | null,
       })),
-      statusHistory: (row.statusHistory || []).map((h: any): OrderStatusHistoryItem => ({
+      statusHistory: (row.statusHistory || []).map((h): OrderStatusHistoryItem => ({
         id: h.id,
         status: h.status,
         changedById: h.changedById,
         note: h.note,
         createdAt: h.createdAt,
       })),
-      orderNotes: (row.orderNotes || []).map((n: any): OrderNoteItem => ({
+      orderNotes: (row.orderNotes || []).map((n): OrderNoteItem => ({
         id: n.id,
         authorId: n.authorId,
         note: n.note,
         isCustomerVisible: n.isCustomerVisible,
         createdAt: n.createdAt,
       })),
-      payments: (row.payments || []).map((p: any): OrderPaymentItem => ({
+      payments: (row.payments || []).map((p): OrderPaymentItem => ({
         id: p.id,
         provider: p.provider,
         status: p.status,
@@ -110,8 +199,8 @@ export class OrdersRepository {
         ? {
             id: row.invoiceSnapshot.id,
             invoiceNumber: row.invoiceSnapshot.invoiceNumber,
-            storeProfile: row.invoiceSnapshot.storeProfile,
-            invoiceSettings: row.invoiceSnapshot.invoiceSettings,
+            storeProfile: row.invoiceSnapshot.storeProfile as Record<string, unknown>,
+            invoiceSettings: row.invoiceSnapshot.invoiceSettings as Record<string, unknown>,
             issuedAt: row.invoiceSnapshot.issuedAt,
           }
         : null,
@@ -259,7 +348,8 @@ export class OrdersRepository {
           });
 
           if (existing) {
-            const existingHash = (existing.customerSnapshot as any)?.payloadHash;
+            const snapshot = existing.customerSnapshot as Record<string, unknown> | null;
+            const existingHash = snapshot?.payloadHash;
             if (existingHash && existingHash !== input.payloadHash) {
               throw AppError.conflict('Idempotency key already used with different payload');
             }
@@ -432,6 +522,7 @@ export class OrdersRepository {
               grandTotal: grandTotalDec.toFixed(2),
               paymentStatus: 'PENDING',
               paymentMethod,
+              paymentDeadline: new Date(Date.now() + env.ORDER_PAYMENT_TIMEOUT_HOURS * 60 * 60 * 1000),
               shippingAddressSnapshot: (cartSnapshot.shippingAddress || {
                 address: 'Not Provided',
                 district: 'Dhaka',
@@ -515,17 +606,19 @@ export class OrdersRepository {
         },
         { timeout: 15000, maxWait: 10000 },
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Handle unique constraint collision on idempotencyKey gracefully
+      const errObj = err as { code?: string; message?: string; meta?: { target?: unknown } };
       const isUniqueCollision =
         (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') ||
-        (err.code === 'P2002' || err.message?.includes('Unique constraint failed'));
+        (errObj?.code === 'P2002' || errObj?.message?.includes('Unique constraint failed'));
 
-      if (isUniqueCollision && (err.message?.includes('idempotencyKey') || err.message?.includes('Order_idempotencyKey_key') || String(err.meta?.target || '').includes('idempotencyKey'))) {
+      if (isUniqueCollision && (errObj?.message?.includes('idempotencyKey') || errObj?.message?.includes('Order_idempotencyKey_key') || String(errObj?.meta?.target || '').includes('idempotencyKey'))) {
         for (let attempt = 0; attempt < 5; attempt++) {
           const existing = await this.findByIdempotencyKey(input.idempotencyKey);
           if (existing) {
-            const existingHash = (existing.customerSnapshot as any)?.payloadHash;
+            const snapshot = existing.customerSnapshot as unknown as Record<string, unknown> | null;
+            const existingHash = snapshot?.payloadHash;
             if (existingHash && existingHash !== input.payloadHash) {
               throw AppError.conflict('Idempotency key already used with different payload');
             }

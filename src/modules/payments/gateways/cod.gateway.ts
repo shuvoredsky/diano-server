@@ -32,19 +32,19 @@ export class CodGateway implements PaymentGateway {
     };
   }
 
-  async handleCallback(payload: Record<string, any>): Promise<GatewayCallbackResult> {
+  async handleCallback(payload: Record<string, unknown>): Promise<GatewayCallbackResult> {
     return {
       success: true,
-      transactionId: payload.tran_id || '',
+      transactionId: typeof payload.tran_id === 'string' ? payload.tran_id : '',
       status: 'PENDING',
       rawPayload: payload,
     };
   }
 
-  async handleIpn(payload: Record<string, any>): Promise<GatewayIpnResult> {
+  async handleIpn(payload: Record<string, unknown>): Promise<GatewayIpnResult> {
     return {
       isAuthentic: true,
-      transactionId: payload.tran_id || '',
+      transactionId: typeof payload.tran_id === 'string' ? payload.tran_id : '',
       status: 'PENDING',
       rawPayload: payload,
     };
