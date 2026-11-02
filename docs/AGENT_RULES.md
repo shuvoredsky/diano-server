@@ -62,3 +62,21 @@ This document establishes the binding architectural, operational, and developmen
   5. Commit hashes + push status.
   6. DB verification pending list.
   7. Decisions requiring user confirmation.
+
+---
+
+### 9. Project Decisions (Scope & Deploy Target)
+1. **Payment Scope:**
+   - Strictly **SSLCOMMERZ + Cash on Delivery (COD)** only.
+   - bKash and Nagad are completely out of scope; Milestone M10b is eliminated.
+   - All stub gateways for bKash/Nagad must be deleted.
+   - `PAYMENT_ENABLED_PROVIDERS` strictly contains only `COD` and `SSLCOMMERZ`; any other provider is rejected by Zod validation schemas.
+   - Prisma enum values in `PaymentProvider` remain for forward compatibility without database migrations, but are documented as future extensions in `docs/SCHEMA_SUMMARY.md`. Zero code, Swagger, or API endpoints expose them.
+2. **Deployment Platform:**
+   - **Target Stack:** Render (free web service) + Neon (PostgreSQL) + Cloudinary.
+   - **Strictly Prohibited:** Docker, Nginx, AWS, or any container infrastructure files. Do not create `Dockerfile`, `docker-compose.yml`, or Nginx configurations. Delete any `docker-compose.dev.yml` if found.
+3. **Redis Architecture:**
+   - No Redis dependency at this stage.
+   - Evaluation postponed until Milestone M14 (Render Key Value or Upstash).
+   - Prior to M14, zero application code, session stores, caches, or rate limiters may hard-depend on a live Redis instance (fallback to in-memory/DB or graceful 503 on readiness checks).
+
