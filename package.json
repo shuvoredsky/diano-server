@@ -16,7 +16,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "storage:check": "tsx scripts/storage-check.ts"
+    "storage:check": "tsx scripts/storage-check.ts",
+    "payment:sandbox-check": "tsx scripts/sandbox-payment-check.ts"
   },
   "keywords": [],
   "author": "",

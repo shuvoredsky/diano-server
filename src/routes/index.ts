@@ -21,6 +21,7 @@ import { siteSettingsController } from '@/modules/site-settings/site-settings.co
 import { bannersRouter, publicBannersRouter } from '@/modules/banners/banners.routes';
 import { pagesRouter, publicPagesRouter } from '@/modules/pages/pages.routes';
 import { ordersRouter, adminOrdersRouter } from '@/modules/orders/orders.routes';
+import { paymentsRouter, adminPaymentsRouter } from '@/modules/payments/payments.routes';
 
 const rootRouter = Router();
 
@@ -77,7 +78,8 @@ rootRouter.use('/public/pages', publicPagesRouter);
 rootRouter.use('/admin/orders', adminOrdersRouter);
 rootRouter.use('/orders', ordersRouter);
 
+// Payments & Gateways (Customer & Admin)
+rootRouter.use('/admin/payments', adminPaymentsRouter);
+rootRouter.use('/payments', paymentsRouter);
+
 export { rootRouter };
-
-
-

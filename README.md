@@ -132,3 +132,48 @@ DIRECT_URL="postgresql://user:pass@ep-xyz.eastus2.azure.neon.tech/neondb?sslmode
 TEST_DATABASE_URL="postgresql://user:pass@ep-test-pooler.eastus2.azure.neon.tech/neondb_test?sslmode=require"
 ```
 
+---
+
+## 💳 Payment Gateway (SSLCOMMERZ & COD)
+
+### 1. Diagnostic Sandbox Check
+To test your SSLCOMMERZ sandbox session initiation safely without printing secrets:
+```bash
+npm run payment:sandbox-check
+```
+- Calls `https://sandbox.sslcommerz.com/gwprocess/v4/api.php` with sandbox credentials.
+- Prints the generated `GatewayPageURL` and `sessionkey`.
+- Secret passwords and API keys are strictly redacted and never output.
+
+### 2. Official SSLCOMMERZ Sandbox Test Cards
+Use these sandbox cards from the [official SSLCOMMERZ developer docs](https://developer.sslcommerz.com/doc/v4/):
+
+| Card Brand | Card Number | Expiry | CVV | OTP |
+| :--- | :--- | :--- | :--- | :--- |
+| **VISA** | `4111 1111 1111 1111` | `12/26` | `111` | `111111` |
+| **Mastercard** | `5111 1111 1111 1111` | `12/26` | `111` | `111111` |
+| **AMEX** | `3711 1111 1111 111` | `12/26` | `111` | `111111` |
+
+### 3. Local Webhook & IPN Testing via Tunnel
+Because SSLCOMMERZ IPN notifications are server-to-server POST webhooks, SSLCOMMERZ must be able to reach your local backend.
+1. Start an HTTPS tunnel using **ngrok** or **cloudflared**:
+   ```bash
+   # Option A: ngrok
+   ngrok http 5000
+
+   # Option B: Cloudflare Tunnel
+   cloudflared tunnel --url http://localhost:5000
+   ```
+2. Set your public tunnel URL in `.env`:
+   ```env
+   BACKEND_PUBLIC_URL="https://your-tunnel-subdomain.ngrok-free.app"
+   ```
+3. SSLCOMMERZ session initialization will automatically register `${BACKEND_PUBLIC_URL}/api/v1/payments/sslcommerz/ipn` as the IPN listener.
+4. When testing in the sandbox browser page, successful test payments trigger both customer redirect and asynchronous server-to-server IPN callbacks.
+
+### 4. Zero-Trust Security Model
+- **Zero Client Trust:** Browser redirect callbacks (`/payments/sslcommerz/success`) are never trusted on payload status alone. The server invokes SSLCOMMERZ Order Validation API (`validationserverAPI.php`) with `val_id` to verify amount, currency, and status.
+- **Cryptographic IPN Signature:** Incoming IPN requests verify MD5 hash over sorted `verify_key` parameter list concatenated with `MD5(store_passwd)`.
+- **Replay Protection:** `PaymentEvent` enforces a unique database constraint on `(provider, eventId)` to eliminate duplicate processing.
+- **Strict Stock Commitment:** Stock reservation is committed exactly once upon payment confirmation within an atomic PostgreSQL transaction.
+

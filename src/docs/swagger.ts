@@ -1959,6 +1959,176 @@ export const swaggerDocument = {
         responses: { 200: { description: 'PDF stream', content: { 'application/pdf': {} } } },
       },
     },
+    // ==========================================================================
+    // PAYMENTS (CUSTOMER & GATEWAYS)
+    // ==========================================================================
+    '/api/v1/payments/initiate': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Customer: Initialize online payment session (SSLCOMMERZ)',
+        security: [{ BearerAuth: [] }, {}],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['orderId'],
+                properties: {
+                  orderId: { type: 'string' },
+                  guestToken: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Payment session initialized with GatewayPageURL' },
+          400: { description: 'Invalid order state or payment method' },
+          409: { description: 'Active attempt already in progress' },
+        },
+      },
+    },
+    '/api/v1/payments/sslcommerz/success': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Public: SSLCOMMERZ success redirect callback',
+        requestBody: {
+          required: true,
+          content: {
+            'application/x-www-form-urlencoded': {
+              schema: { type: 'object' },
+            },
+          },
+        },
+        responses: { 302: { description: 'Browser redirect to frontend result page' } },
+      },
+    },
+    '/api/v1/payments/sslcommerz/fail': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Public: SSLCOMMERZ failure redirect callback',
+        requestBody: {
+          required: true,
+          content: {
+            'application/x-www-form-urlencoded': {
+              schema: { type: 'object' },
+            },
+          },
+        },
+        responses: { 302: { description: 'Browser redirect to frontend result page' } },
+      },
+    },
+    '/api/v1/payments/sslcommerz/cancel': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Public: SSLCOMMERZ cancellation redirect callback',
+        requestBody: {
+          required: true,
+          content: {
+            'application/x-www-form-urlencoded': {
+              schema: { type: 'object' },
+            },
+          },
+        },
+        responses: { 302: { description: 'Browser redirect to frontend result page' } },
+      },
+    },
+    '/api/v1/payments/sslcommerz/ipn': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Public: SSLCOMMERZ Instant Payment Notification (IPN) webhook',
+        requestBody: {
+          required: true,
+          content: {
+            'application/x-www-form-urlencoded': {
+              schema: { type: 'object' },
+            },
+          },
+        },
+        responses: { 200: { description: 'IPN processed or duplicate ignored' } },
+      },
+    },
+    '/api/v1/payments/{orderId}/status': {
+      get: {
+        tags: ['Payments'],
+        summary: 'Customer: Get payment status for order',
+        security: [{ BearerAuth: [] }, {}],
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Payment status and attempt history' } },
+      },
+    },
+    // ==========================================================================
+    // ADMIN PAYMENTS & REFUNDS
+    // ==========================================================================
+    '/api/v1/admin/payments': {
+      get: {
+        tags: ['Admin Payments'],
+        summary: 'Admin: List payments with filters and pagination',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'provider', in: 'query', schema: { type: 'string', enum: ['SSLCOMMERZ', 'BKASH', 'NAGAD', 'COD'] } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'orderId', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Paginated payments' } },
+      },
+    },
+    '/api/v1/admin/payments/{id}': {
+      get: {
+        tags: ['Admin Payments'],
+        summary: 'Admin: Get payment details with events timeline and refunds',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Payment details' } },
+      },
+    },
+    '/api/v1/admin/payments/{id}/refund': {
+      post: {
+        tags: ['Admin Payments'],
+        summary: 'Admin: Initiate refund',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['amount', 'reason'],
+                properties: {
+                  amount: { type: 'number', minimum: 0.01 },
+                  reason: { type: 'string', minLength: 3 },
+                  idempotencyKey: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Refund processed' } },
+      },
+    },
+    '/api/v1/admin/payments/{id}/mark-cod-collected': {
+      post: {
+        tags: ['Admin Payments'],
+        summary: 'Admin: Mark COD payment collected upon order delivery',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { note: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'COD payment marked collected' } },
+      },
+    },
   },
 };
 
