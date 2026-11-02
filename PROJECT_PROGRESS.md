@@ -27,8 +27,8 @@
 | **Site Settings & CMS** | Typed Zod configuration groups (store_profile, invoice, seo_defaults, contact), magic-byte logo/favicon uploads, safe public site-config with ETag/cache, visual banners with Dhaka scheduling window and URL safety, CMS pages with Zod discriminated union blocks JSON (AI landing page ready), immutable PageRevision ledger | ✅ Completed | DB verified (14/14 unit + 3/3 real Neon DB integration tests passing) |
 | **M10a: Payments Core & SSLCOMMERZ v4 + COD** | Payment state machine, zero-trust server validation, MD5 IPN verification with timingSafeEqual, atomic stock commitment, idempotent webhook/redirect race handling, admin refund & COD collection, sandbox diagnostic tool | ✅ Completed | DB verified (17/17 unit + 5/5 real Neon DB integration tests passing) |
 | **M10b: Mobile Financial Services (bKash & Nagad)** | bKash and Nagad direct merchant API integrations | ⏳ Pending | Awaiting credentials |
-| **M11: Fraud Detection & Risk Scoring** | Explainable rule-based heuristics, RiskScorer engine (score 0-100, LOW/MEDIUM/HIGH), non-blocking fail-open hook, review queue, OTP customer verification, append-only decision ledger | 🚀 In Progress | Pure rule functions, explainable factors |
-| **M12: Shipping, Coupons, Returns & Refunds** | DB-driven ShippingZone & methods, CourierAdapter interface, race-safe coupons & flash sales, customer return requests with return window, inspection & return restock, refund idempotency & proportional coupon refunds | 🚀 In Progress | Real DB integration tests |
+| **M11: Fraud Detection & Risk Scoring** | Explainable rule-based heuristics, RiskScorer engine (score 0-100, LOW/MEDIUM/HIGH), non-blocking fail-open hook, review queue, OTP customer verification, append-only decision ledger | ✅ Completed | DB verified (16/16 unit + 3/3 real Neon DB integration tests passing) |
+| **M12: Shipping, Coupons, Returns & Refunds** | DB-driven ShippingZone & methods, CourierAdapter interface, race-safe coupons & flash sales, customer return requests with return window, inspection & return restock, refund idempotency & proportional coupon refunds | ✅ Completed | DB verified (12/12 unit + 6/6 real Neon DB integration tests passing) |
 | **M13: Advanced Analytics & SEO Optimization** | Sales reporting, Google Search Console structured data | ⏳ Queued | Scheduled |
 | **M14: Background Jobs, Queues & Automation** | BullMQ workers, automated order expiry, reconciliation crons | ⏳ Queued | Scheduled |
 
@@ -342,5 +342,52 @@ The following items are implemented according to Prisma models and interfaces, b
   5. Apply `pg_trgm` extension and create GIN trigram indexes (`idx_product_name_trgm`, `idx_product_description_trgm`) for accelerated search.
   6. Verify soft-delete composite index performance (`[status, deletedAt]`, `[isActive, deletedAt]`).
   7. Verify `AuditLog` persistence on price adjustments.
-  8. Run complete integration test suite with `TEST_DATABASE_URL` against live PostgreSQL.
+---
+
+## Milestone M11: Fraud Detection & Risk Scoring (Completed)
+- **Status:** Completed (DB Mode Verified on Neon PostgreSQL)
+- **Key Modules & Implementations:**
+  1. **Rule-Based Heuristic Risk Engine (`src/modules/fraud-detection`):**
+     - Pure evaluation functions implementing 9 distinct risk rules: Order Velocity (hourly/daily), High Value Orders (>৳10,000 / >৳25,000), First-Time Customer High-Value COD (>৳5,000), Address Mismatch (delivery district vs customer address history), Disposable Email Domains, Phone Carrier/Formatting Anomaly, Rapid Checkout Velocity (<30s between creation and order), High Cancellation/RTO History, and IP Geolocation District Mismatch.
+     - Additive scoring capped strictly at 100 with explainable triggered factors array.
+     - Categorization: `LOW` (0-29), `MEDIUM` (30-69), `HIGH` (70-100).
+  2. **Non-Blocking Fail-Open Policy:**
+     - Order placement hook runs asynchronously/safely without blocking checkout flow if evaluation errors.
+     - High-risk orders are placed on manual review hold (`PENDING_REVIEW`), strictly blocking progression to `CONFIRMED` or `SHIPPED` via state machine hook until reviewed by staff.
+  3. **Admin Review Queue & OTP Verification:**
+     - Review queue endpoints: `GET /admin/fraud/review-queue`, `GET /admin/fraud/assessments/:orderId`, `PATCH /admin/fraud/assessments/:orderId/review`.
+     - Append-only `FraudDecisionHistory` ledger capturing operator notes and decisions (`APPROVE`, `REJECT`, `REQUEST_OTP`).
+     - OTP Challenge: `POST /admin/fraud/assessments/:orderId/request-otp` and customer verification `POST /admin/fraud/assessments/:orderId/verify-otp`.
+- **Test Suite Results:**
+  - **16/16 Unit Tests Passed** across all heuristics, boundary capping, and factor explainability.
+  - **3/3 Integration Tests Passed** on live Neon PostgreSQL (auto-assessment on order creation, order hold hook blocking dispatch, admin review approval).
+
+---
+
+## Milestone M12: Shipping, Coupons, Returns & Refunds (Completed)
+- **Status:** Completed (DB Mode Verified on Neon PostgreSQL)
+- **Key Modules & Implementations:**
+  1. **Shipping & Logistics (`src/modules/shipping`):**
+     - Geographic `ShippingZone` management with district matching and fallback resolution.
+     - DB-driven `ShippingMethod` rates: base fee, per-kg weight charges, and free shipping thresholds.
+     - `CourierAdapter` interface with `ManualCourierAdapter` mock implementation generating tracking numbers.
+     - Shipment lifecycle state machine (`PENDING -> PICKED_UP -> IN_TRANSIT -> DELIVERED / FAILED_ATTEMPT`) with delivery attempt logs and state machine hooks automatically advancing order to `SHIPPED` and `DELIVERED`.
+  2. **Coupons, Discounts & Flash Sales (`src/modules/coupons`):**
+     - Promotional vouchers supporting `PERCENTAGE` (with `maxDiscount` cap), `FIXED`, and `FREE_SHIPPING`.
+     - Pure validation rules: date validity windows, minimum purchase spend, on-sale item exclusion, and global & per-user usage limits.
+     - Atomic race-safe usage increments using conditional SQL: `UPDATE "Coupon" SET "usedCount" = "usedCount" + 1 WHERE id = ... AND ("usageLimit" IS NULL OR "usedCount" < "usageLimit")`.
+     - Idempotent application and removal to checkout sessions (`/checkout/sessions/:id/coupon`).
+     - Flash sales with product-level price overrides and time-boxed schedules.
+  3. **Customer Returns & Restock Ledger (`src/modules/returns`):**
+     - Customer return requests (`POST /orders/:id/returns`) with 7-day delivery return window enforcement and item quantity validation.
+     - Admin inspection workflow (`/admin/returns/:id/receive`): grading condition (`GOOD`, `DEFECTIVE`, `DAMAGED`) and restock action.
+     - **Ledger Consistency:** Return restock atomically invokes `inventoryService.restock` recording immutable `StockMovement` of type `RETURN_RESTOCK` referencing the return request.
+  4. **Proportional Refunds Engine (`src/modules/refunds`):**
+     - Pure mathematical calculation dividing applied coupon discounts proportionally across returned items based on line total value.
+     - Strict refund ceiling: total order refunds cannot exceed `paidAmount - totalRefunded`.
+     - Idempotency key protection and automatic order payment status synchronization (`PARTIALLY_REFUNDED` / `REFUNDED`).
+- **Test Suite Results:**
+  - **12/12 Unit Tests Passed** covering proportional discount calculation, rounding accuracy, ceiling caps, free shipping, percentage caps, expiry, and exclusions.
+  - **6/6 Integration Tests Passed** on live Neon PostgreSQL covering shipping zone/method calculation, shipment booking & delivery state transitions, coupon checkout application & atomic usage, return request creation, warehouse inspection & `RETURN_RESTOCK` stock movement, and proportional refund execution.
+
 

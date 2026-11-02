@@ -4,6 +4,7 @@ import { env } from '@/config/env.config';
 import { AppError } from '@/utils/app-error';
 import { authenticate, optionalAuthenticate, requirePermission } from '@/middlewares/auth.middleware';
 import { ordersController } from './orders.controller';
+import { shippingController } from '@/modules/shipping/shipping.controller';
 
 export const ordersRouter = Router();
 export const adminOrdersRouter = Router();
@@ -78,6 +79,23 @@ adminOrdersRouter.get(
   '/:id',
   requirePermission('order:read'),
   ordersController.getAdminOrderById,
+);
+
+// Admin order shipment endpoints
+adminOrdersRouter.get(
+  '/:id/shipments',
+  requirePermission('order:read', 'shipping:read'),
+  shippingController.getOrderShipment,
+);
+adminOrdersRouter.post(
+  '/:id/shipments',
+  requirePermission('order:ship', 'shipping:manage'),
+  shippingController.createOrderShipment,
+);
+adminOrdersRouter.patch(
+  '/:id/shipments/status',
+  requirePermission('order:ship', 'shipping:manage'),
+  shippingController.updateOrderShipmentStatus,
 );
 
 // ============================================================================

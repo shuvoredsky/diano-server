@@ -1,5 +1,4 @@
-import { prisma } from '@/config/database';
-import { toMoneyString, toNumberSafe } from '@/utils/currency.util';
+import { shippingCalculator } from '@/modules/shipping/shipping.calculator';
 
 export interface ShippingCalculationResult {
   shippingCharge: string;
@@ -13,6 +12,9 @@ export interface IShippingCalculator {
   calculateShipping(params: {
     district?: string;
     deliveryMethodCode?: string;
+    subtotal?: string;
+    hasFreeShippingProducts?: boolean;
+    totalWeightKg?: number;
   }): Promise<ShippingCalculationResult>;
 }
 
@@ -20,43 +22,35 @@ export class DatabaseShippingCalculator implements IShippingCalculator {
   async calculateShipping(params: {
     district?: string;
     deliveryMethodCode?: string;
+    subtotal?: string;
+    hasFreeShippingProducts?: boolean;
+    totalWeightKg?: number;
   }): Promise<ShippingCalculationResult> {
     const rawDistrict = params.district?.trim().toLowerCase() || 'dhaka';
-
     try {
-      // Find matching shipping zone in database
-      const zones = await prisma.shippingZone.findMany({
-        where: { isActive: true },
-        include: {
-          methods: {
-            where: { isActive: true },
-          },
-        },
+      const methods = await shippingCalculator.calculateMethods({
+        district: params.district,
+        deliveryMethodCode: params.deliveryMethodCode,
+        subtotal: params.subtotal,
+        hasFreeShippingProducts: params.hasFreeShippingProducts,
+        totalWeightKg: params.totalWeightKg,
       });
 
-      for (const zone of zones) {
-        const districtsList = Array.isArray(zone.districts)
-          ? (zone.districts as string[]).map(d => d.toLowerCase())
-          : [];
+      const selected = params.deliveryMethodCode
+        ? methods.find(m => m.methodCode === params.deliveryMethodCode) || methods[0]
+        : methods[0];
 
-        if (districtsList.includes(rawDistrict)) {
-          const selectedMethod = params.deliveryMethodCode
-            ? zone.methods.find(m => m.code === params.deliveryMethodCode) || zone.methods[0]
-            : zone.methods[0];
-
-          if (selectedMethod) {
-            return {
-              shippingCharge: toMoneyString(toNumberSafe(selectedMethod.baseCharge)),
-              zoneName: zone.name,
-              methodName: selectedMethod.name,
-              methodCode: selectedMethod.code,
-              estimatedDays: selectedMethod.estimatedDays,
-            };
-          }
-        }
+      if (selected) {
+        return {
+          shippingCharge: selected.calculatedCharge,
+          zoneName: selected.zoneName,
+          methodName: selected.methodName,
+          methodCode: selected.methodCode,
+          estimatedDays: selected.estimatedDays,
+        };
       }
     } catch {
-      // Database not connected or empty, proceed to deterministic seed defaults
+      // Fallback
     }
 
     // Default business rules (Inside Dhaka = 60 BDT, Outside Dhaka = 120 BDT)

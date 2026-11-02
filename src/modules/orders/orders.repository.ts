@@ -6,7 +6,6 @@ import { AppError } from '@/utils/app-error';
 import { env } from '@/config/env.config';
 import { formatInTimeZone } from 'date-fns-tz';
 import { defaultShippingCalculator } from '@/modules/checkout/checkout.shipping';
-import { defaultCouponCalculator } from '@/modules/checkout/checkout.coupon';
 import { inventoryService } from '@/modules/inventory/inventory.service';
 import type { CheckoutCartSnapshot } from '@/modules/checkout/checkout.types';
 import type {
@@ -451,11 +450,31 @@ export class OrdersRepository {
           });
           const shippingTotalDec = new Decimal(shippingResult.shippingCharge);
 
-          const couponResult = await defaultCouponCalculator.calculateDiscount({
-            subtotal: subtotalDec.toFixed(2),
-            userId: session.userId,
-          });
-          const discountTotalDec = new Decimal(couponResult.discount);
+          let couponIdToConnect: string | null = null;
+          let discountTotalDec = new Decimal('0.00');
+
+          const rawCouponIdentifier =
+            (cartSnapshot as unknown as Record<string, unknown>).couponId ||
+            (cartSnapshot as unknown as Record<string, unknown>).couponCode;
+
+          if (rawCouponIdentifier) {
+            const coupon = await tx.coupon.findFirst({
+              where: {
+                OR: [
+                  { id: String(rawCouponIdentifier) },
+                  { code: String(rawCouponIdentifier).trim().toUpperCase() },
+                ],
+                deletedAt: null,
+                isActive: true,
+              },
+            });
+
+            if (coupon) {
+              couponIdToConnect = coupon.id;
+              discountTotalDec = new Decimal((cartSnapshot as unknown as Record<string, unknown>).discount?.toString() || '0.00');
+            }
+          }
+
           const taxTotalDec = new Decimal('0.00');
 
           const grandTotalDec = subtotalDec
@@ -537,6 +556,7 @@ export class OrdersRepository {
                 payloadHash: input.payloadHash,
               } as Prisma.InputJsonValue,
               notes: input.customerNotes || null,
+              couponId: couponIdToConnect,
               items: {
                 create: preparedItems.map(pi => ({
                   variantId: pi.variantId,
@@ -574,6 +594,27 @@ export class OrdersRepository {
               payments: true,
             },
           });
+
+          // Atomic conditional increment of coupon usage
+          if (couponIdToConnect) {
+            const updated = await tx.$executeRaw`
+              UPDATE "Coupon"
+              SET "usedCount" = "usedCount" + 1
+              WHERE "id" = ${couponIdToConnect} AND ("usageLimit" IS NULL OR "usedCount" < "usageLimit")
+            `;
+            if (updated === 0) {
+              throw AppError.badRequest('Coupon usage limit reached', 'COUPON_EXHAUSTED');
+            }
+
+            await tx.couponUsage.create({
+              data: {
+                couponId: couponIdToConnect,
+                orderId: createdOrder.id,
+                userId: customerId,
+                discountAmount: discountTotalDec.toFixed(2),
+              },
+            });
+          }
 
           // 9. Mark checkout session as CONVERTED and emit checkout event
           await tx.checkoutSession.update({

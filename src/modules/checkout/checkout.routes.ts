@@ -4,6 +4,7 @@ import { env } from '@/config/env.config';
 import { AppError } from '@/utils/app-error';
 import { optionalAuthenticate } from '@/middlewares/auth.middleware';
 import { checkoutController } from './checkout.controller';
+import { couponsController } from '@/modules/coupons/coupons.controller';
 
 export const checkoutRouter = Router();
 
@@ -44,5 +45,10 @@ checkoutRouter.patch('/sessions/:id/shipping-info', checkoutRateLimiter, checkou
 checkoutRouter.patch('/sessions/:id/delivery-method', checkoutRateLimiter, checkoutController.updateDeliveryMethod);
 checkoutRouter.patch('/sessions/:id/payment-method', checkoutRateLimiter, checkoutController.updatePaymentMethod);
 
+// Coupon endpoints
+checkoutRouter.post('/sessions/:id/coupon', checkoutRateLimiter, couponsController.applyCouponToCheckout);
+checkoutRouter.delete('/sessions/:id/coupon', checkoutRateLimiter, couponsController.removeCouponFromCheckout);
+
 // Event telemetry
 checkoutRouter.post('/sessions/:id/events', eventRateLimiter, checkoutController.recordEvent);
+

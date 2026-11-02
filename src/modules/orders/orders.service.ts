@@ -170,7 +170,8 @@ export class OrdersService {
 
     // Idempotent same-state check
     if (order.status === input.status) {
-      const hasViewCost = actorContext.permissions.includes('order:view_cost');
+      const hasViewCost =
+        actorContext.permissions.includes('*') || actorContext.permissions.includes('order:view_cost');
       return this.sanitizeOrder(order, hasViewCost);
     }
 
@@ -180,6 +181,7 @@ export class OrdersService {
     // Enforce granular permission per transition
     const requiredPerm = getRequiredPermissionForTransition(input.status);
     const hasPermission =
+      actorContext.permissions.includes('*') ||
       actorContext.permissions.includes(requiredPerm) ||
       actorContext.permissions.includes('order:manage');
 
@@ -310,7 +312,8 @@ export class OrdersService {
       },
     });
 
-    const hasViewCost = actorContext.permissions.includes('order:view_cost');
+    const hasViewCost =
+      actorContext.permissions.includes('*') || actorContext.permissions.includes('order:view_cost');
     return this.sanitizeOrder(this.repo.formatOrder(updated), hasViewCost);
   }
 

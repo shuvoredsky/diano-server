@@ -23,6 +23,16 @@ import { pagesRouter, publicPagesRouter } from '@/modules/pages/pages.routes';
 import { ordersRouter, adminOrdersRouter } from '@/modules/orders/orders.routes';
 import { paymentsRouter, adminPaymentsRouter } from '@/modules/payments/payments.routes';
 import { adminFraudRouter } from '@/modules/fraud-detection/fraud.routes';
+import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
+import { shippingRouter, adminShippingRouter } from '@/modules/shipping/shipping.routes';
+import { shippingController } from '@/modules/shipping/shipping.controller';
+import {
+  adminCouponsRouter,
+  adminFlashSalesRouter,
+  publicFlashSalesRouter,
+} from '@/modules/coupons/coupons.routes';
+import { customerReturnsRouter, adminReturnsRouter } from '@/modules/returns/returns.routes';
+import { adminRefundsRouter } from '@/modules/refunds/refunds.routes';
 
 const rootRouter = Router();
 
@@ -86,4 +96,27 @@ rootRouter.use('/payments', paymentsRouter);
 // Fraud Detection & Review Queue (Admin)
 rootRouter.use('/admin/fraud', adminFraudRouter);
 
+// Shipping & Logistics (Public & Admin)
+rootRouter.use('/shipping', shippingRouter);
+rootRouter.use('/admin/shipping', adminShippingRouter);
+rootRouter.patch(
+  '/admin/shipments/:id/status',
+  authenticate,
+  requirePermission('order:ship', 'shipping:manage'),
+  shippingController.updateShipmentStatus,
+);
+
+// Coupons & Promotions (Public & Admin)
+rootRouter.use('/admin/coupons', adminCouponsRouter);
+rootRouter.use('/admin/flash-sales', adminFlashSalesRouter);
+rootRouter.use('/flash-sales', publicFlashSalesRouter);
+
+// Returns & Inspections (Customer & Admin)
+rootRouter.use('/admin/returns', adminReturnsRouter);
+rootRouter.use('/', customerReturnsRouter);
+
+// Refunds (Admin)
+rootRouter.use('/admin/refunds', adminRefundsRouter);
+
 export { rootRouter };
+
