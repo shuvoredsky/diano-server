@@ -22,6 +22,7 @@ import { bannersRouter, publicBannersRouter } from '@/modules/banners/banners.ro
 import { pagesRouter, publicPagesRouter } from '@/modules/pages/pages.routes';
 import { ordersRouter, adminOrdersRouter } from '@/modules/orders/orders.routes';
 import { paymentsRouter, adminPaymentsRouter } from '@/modules/payments/payments.routes';
+import { adminFraudRouter } from '@/modules/fraud-detection/fraud.routes';
 
 const rootRouter = Router();
 
@@ -81,5 +82,8 @@ rootRouter.use('/orders', ordersRouter);
 // Payments & Gateways (Customer & Admin)
 rootRouter.use('/admin/payments', adminPaymentsRouter);
 rootRouter.use('/payments', paymentsRouter);
+
+// Fraud Detection & Review Queue (Admin)
+rootRouter.use('/admin/fraud', adminFraudRouter);
 
 export { rootRouter };

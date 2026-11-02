@@ -100,21 +100,23 @@ export const authorize = (...allowedRoles: string[]) => {
 /**
  * Granular Permission check middleware using in-memory cached role permissions
  */
-export const requirePermission = (permissionSlug: string) => {
+export const requirePermission = (...permissionSlugs: string[]) => {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.user) {
         return next(AppError.unauthorized('Authentication required'));
       }
 
-      const hasPerm = await permissionsCache.hasPermission(req.user.roles, permissionSlug);
-      if (!hasPerm) {
-        return next(
-          AppError.forbidden(`Access denied: Missing required permission [${permissionSlug}]`),
-        );
+      for (const slug of permissionSlugs) {
+        const hasPerm = await permissionsCache.hasPermission(req.user.roles, slug);
+        if (hasPerm) {
+          return next();
+        }
       }
 
-      next();
+      return next(
+        AppError.forbidden(`Access denied: Missing required permission [${permissionSlugs.join(', ')}]`),
+      );
     } catch (error) {
       next(error);
     }

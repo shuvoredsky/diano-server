@@ -21,15 +21,18 @@ import type {
   IFraudAssessor,
   OrderNoteItem,
 } from './orders.types';
-import { NoopFraudAssessor } from './orders.types';
 
 export class OrdersService {
   constructor(
     private readonly repo: OrdersRepository = ordersRepository,
     private readonly audit: IAuditService = auditService,
     private readonly invoiceSvc: InvoiceService = invoiceService,
-    private readonly fraudAssessor: IFraudAssessor = new NoopFraudAssessor(),
+    private fraudAssessor?: IFraudAssessor,
   ) {}
+
+  public setFraudAssessor(assessor: IFraudAssessor): void {
+    this.fraudAssessor = assessor;
+  }
 
   /**
    * Generates a deterministic hash of the checkout session payload for idempotency verification
@@ -74,9 +77,11 @@ export class OrdersService {
       payloadHash,
     });
 
-    // Run FraudAssessor hook (noop in M9, wired in M11)
+    // Run FraudAssessor hook
     if (!result.isIdempotentReplay) {
-      await this.fraudAssessor.assessOrder(result.order);
+      if (this.fraudAssessor) {
+        await this.fraudAssessor.assessOrder(result.order);
+      }
 
       await this.audit.record({
         actorId: currentUser?.id || result.order.customerId || undefined,
@@ -180,6 +185,23 @@ export class OrdersService {
 
     if (!hasPermission) {
       throw AppError.forbidden(`Permission '${requiredPerm}' is required to transition order to '${input.status}'`);
+    }
+
+    // Block transition to CONFIRMED or SHIPPED if held under high fraud risk
+    if (input.status === 'CONFIRMED' || input.status === 'SHIPPED') {
+      const fraudAssessment = await prisma.fraudAssessment.findUnique({
+        where: { orderId },
+      });
+      if (
+        fraudAssessment &&
+        fraudAssessment.riskLevel === 'HIGH' &&
+        fraudAssessment.reviewStatus !== 'APPROVED' &&
+        fraudAssessment.reviewStatus !== 'AUTO_APPROVED'
+      ) {
+        throw AppError.forbidden(
+          'Order is held under manual fraud review and cannot be confirmed or shipped until approved by staff.',
+        );
+      }
     }
 
     // Execute state transition and inventory side-effects in a single transaction

@@ -49,6 +49,7 @@ export class OrdersController {
       const idempotencyKey = (
         (req.headers['idempotency-key'] as string) ||
         (req.headers['Idempotency-Key'] as string) ||
+        (req.body?.idempotencyKey as string) ||
         ''
       ).trim();
 

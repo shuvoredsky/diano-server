@@ -324,9 +324,9 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         quantity: params.quantity,
         quantityBefore,
         quantityAfter,
-        reason: params.reason,
-        referenceType: params.referenceType,
-        referenceId: params.referenceId,
+        reason: params.reason || params.action || 'Stock operation',
+        referenceType: params.referenceType || 'MANUAL',
+        referenceId: params.referenceId || params.variantId,
         actorId: params.actorId ?? null,
       },
     });

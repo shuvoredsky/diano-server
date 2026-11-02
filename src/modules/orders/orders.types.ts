@@ -124,6 +124,7 @@ export interface OrderFilter {
 export interface UpdateOrderStatusInput {
   status: OrderStatus;
   note?: string;
+  cancellationReason?: string;
   actorId?: string;
   actorRole?: string;
 }
