@@ -53,11 +53,15 @@ enum OrderStatus {
 }
 
 enum PaymentStatus {
+  INITIATED
   PENDING
   PROCESSING
+  PAID
   COMPLETED
   FAILED
   CANCELLED
+  EXPIRED
+  REFUND_PENDING
   REFUNDED
   PARTIALLY_REFUNDED
 }
@@ -1070,6 +1074,7 @@ model Payment {
   currency          String          @default("BDT")
   transactionId     String?
   providerReference String?
+  bankTranId        String?
   idempotencyKey    String?         @unique
   paymentFee        Decimal         @default(0.00) @db.Decimal(12, 2)
   paidAt            DateTime?
@@ -1113,6 +1118,7 @@ model Refund {
   status           RefundStatus @default(PENDING)
   processedById    String?
   providerRefundId String?
+  idempotencyKey   String?      @unique
   processedAt      DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt

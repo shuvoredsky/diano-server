@@ -68,9 +68,15 @@ The DIANO database is structured as a high-integrity relational model designed f
 - **`AppSequence`**: High-concurrency atomic counter sequence table (`DN-YYMMDD-XXXXX` for orders in Asia/Dhaka date, and `INV-YYMM-XXXXX` for invoices) preventing collisions and race conditions.
 
 ### H. Payments & Gateway Events (3 Models)
-- **`Payment`**: Financial transaction record supporting SSLCOMMERZ, bKash, Nagad, and Cash-on-Delivery (COD). Unique constraint on `[provider, transactionId]`.
-- **`PaymentEvent`**: Raw IPN/webhook callback ledger with signature validity check and `[provider, eventId]` unique constraint to eliminate replay attacks.
-- **`Refund`**: Reverse-transaction record tracking partial and full refunds.
+- **`Payment`**: Master financial transaction record supporting SSLCOMMERZ, bKash, Nagad, and Cash-on-Delivery (COD). Unique constraint on `[provider, transactionId]`.
+  - **State Machine:** `INITIATED -> PENDING -> PAID | FAILED | CANCELLED | EXPIRED`.
+  - **Irreversible Paid Rule:** Once `PAID`, a payment can NEVER revert to unpaid, failed, or cancelled states (only transitions to `REFUND_PENDING -> REFUNDED | PARTIALLY_REFUNDED`).
+  - **Stock Commitment Rule:**
+    - Online payments (SSLCOMMERZ): Stock is reserved upon order placement (`ORDER_RESERVATION`) and committed (`ORDER_FULFILLMENT`) inside an atomic PostgreSQL transaction when the server verifies payment success via the gateway's Order Validation API.
+    - Cash on Delivery (COD): Stock is reserved upon placement and committed when the order status reaches `SHIPPED`. Payment is marked `PAID` by administrators upon `DELIVERED` status via `POST /admin/payments/:id/mark-cod-collected`.
+  - **Stock Release Rule:** On payment failure or explicit customer cancellation, reserved stock is released immediately (`ORDER_RELEASE`), returning units to `availableStock`.
+- **`PaymentEvent`**: Raw IPN/webhook callback ledger with signature validity check and `[provider, eventId]` unique constraint to eliminate replay attacks and duplicate processing.
+- **`Refund`**: Reverse-transaction record tracking partial and full refunds with `@unique` `idempotencyKey` preventing duplicate disbursement requests.
 
 ### I. Fraud Detection (3 Models)
 - **`FraudRule`**: Configurable risk-scoring heuristics (order velocity, high value, address mismatch).

@@ -111,6 +111,11 @@ export const permissionsData = [
   { resource: 'order', action: 'ship', name: 'Ship Orders', slug: 'order:ship', description: 'Mark orders as shipped and dispatch' },
   { resource: 'order', action: 'manage', name: 'Manage Orders', slug: 'order:manage', description: 'Full operational management over orders' },
   { resource: 'order', action: 'view_cost', name: 'View Order Costs & Margins', slug: 'order:view_cost', description: 'View confidential costPrice and gross margins on orders' },
+
+  // Payment Permissions
+  { resource: 'payment', action: 'read', name: 'Read Payments', slug: 'payment:read', description: 'View payment transactions and statuses' },
+  { resource: 'payment', action: 'manage', name: 'Manage Payments', slug: 'payment:manage', description: 'Operational control over payment transactions' },
+  { resource: 'payment', action: 'refund', name: 'Refund Payments', slug: 'payment:refund', description: 'Authorize and initiate customer refunds' },
 ];
 
 export const rolesData = SYSTEM_ROLES;
@@ -227,6 +232,9 @@ export async function seedDatabase() {
       'settings:read',
       'banner:manage',
       'page:manage',
+      'payment:read',
+      'payment:manage',
+      'payment:refund',
     ];
     for (const [slug, permId] of permissionMap.entries()) {
       if (managerAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
