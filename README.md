@@ -214,6 +214,13 @@ To deploy schema migrations to your Neon database:
   - `DB_CONNECTION_TIMEOUT_MS` defaults to `30000` (30s).
   - `checkDatabaseHealth` implements automatic exponential backoff retry to gracefully survive Neon cold-start wakeups.
 
+### 4. Cloud Region Co-location (Neon & Render in Singapore Recommended)
+> [!TIP]
+> **Always co-locate your Render Web Service and Neon PostgreSQL database in the same geographical region (Singapore `ap-southeast-1` / `singapore` recommended for Bangladesh audience).**
+>
+> - **The Latency Problem:** PostgreSQL interactive transactions (`prisma.$transaction`) execute multiple queries sequentially within an active backend connection. If Render is hosted in Singapore and Neon is in US-East (`eastus2`), every single database query incurs a cross-continent network roundtrip of 200–300ms. A transaction with 6 sequential queries will spend 1.5–2.0 seconds purely in transatlantic wire latency, holding database locks and risking timeouts.
+> - **The Co-location Solution:** Co-locating both services in Singapore drops inter-service ping to < 5ms. The entire atomic order placement transaction finishes in under 50–100ms, freeing database connection pool slots immediately and eliminating timeouts.
+
 ### 4. SSLCOMMERZ Public URLs & The Critical Need for Reconcile Jobs
 - **`BACKEND_PUBLIC_URL`:** In production, set this to your Render service URL (e.g. `https://diano-server.onrender.com`). SSLCOMMERZ will use this domain for success, fail, cancel redirects and asynchronous IPN callbacks.
 - **Why the Reconcile Job is Critical on Free Tier:**

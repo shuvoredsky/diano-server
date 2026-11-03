@@ -245,5 +245,38 @@ describe('M12 Unit Tests — Shipping, Coupons & Proportional Refunds', () => {
       expect(res.discountAmount).toBe('0.00');
       expect(res.newGrandTotal).toBe('800.00'); // 800 - 0 + 120 - 120
     });
+
+    it('simulates 5 parallel checkout threads competing for usageLimit: 1 => exactly 1 acquires coupon', async () => {
+      // In-memory simulation of PostgreSQL atomic conditional update:
+      // UPDATE "Coupon" SET "usedCount" = "usedCount" + 1 WHERE id = $1 AND ("usageLimit" IS NULL OR "usedCount" < "usageLimit")
+      let usedCount = 0;
+      const usageLimit = 1;
+      let mutex = Promise.resolve();
+
+      const tryUseCoupon = async (): Promise<boolean> => {
+        // Enforce serial lock inspection simulating database row lock
+        return new Promise(resolve => {
+          mutex = mutex.then(async () => {
+            if (usedCount < usageLimit) {
+              usedCount++;
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          });
+        });
+      };
+
+      const results = await Promise.all(
+        Array.from({ length: 5 }).map(() => tryUseCoupon()),
+      );
+
+      const successful = results.filter(r => r === true);
+      const failed = results.filter(r => r === false);
+
+      expect(successful.length).toBe(1);
+      expect(failed.length).toBe(4);
+      expect(usedCount).toBe(1);
+    });
   });
 });

@@ -332,59 +332,132 @@ export class OrdersRepository {
     input: CreateOrderInput & { payloadHash: string },
   ): Promise<{ order: OrderEntity; isIdempotentReplay: boolean }> {
     try {
-      return await prisma.$transaction(
-        async tx => {
-          // 1. Idempotency verification: check if identical key exists
-          const existing = await tx.order.findUnique({
-            where: { idempotencyKey: input.idempotencyKey },
-            include: {
-              items: true,
-              statusHistory: true,
-              orderNotes: true,
-              payments: true,
-              invoiceSnapshot: true,
+      // 1. Idempotency pre-check outside transaction to avoid holding locks on duplicate requests
+      const existingPre = await this.findByIdempotencyKey(input.idempotencyKey);
+      if (existingPre) {
+        const snapshot = existingPre.customerSnapshot as Record<string, unknown> | null;
+        const existingHash = snapshot?.payloadHash;
+        if (existingHash && existingHash !== input.payloadHash) {
+          throw AppError.conflict('Idempotency key already used with different payload');
+        }
+        return {
+          order: existingPre,
+          isIdempotentReplay: true,
+        };
+      }
+
+      // 2. Read-only session verification & payload extraction outside transaction
+      const session = await prisma.checkoutSession.findUnique({
+        where: { id: input.checkoutSessionId },
+      });
+
+      if (!session) {
+        throw AppError.notFound('Checkout session not found');
+      }
+      if (session.status === 'CONVERTED') {
+        throw AppError.conflict('Checkout session has already been converted to an order');
+      }
+      if (session.status === 'EXPIRED' || session.expiresAt < new Date()) {
+        throw AppError.badRequest('Checkout session has expired');
+      }
+
+      const cartSnapshot = session.cartSnapshot as unknown as CheckoutCartSnapshot;
+      if (!cartSnapshot || !Array.isArray(cartSnapshot.items) || cartSnapshot.items.length === 0) {
+        throw AppError.badRequest('Checkout session contains no items');
+      }
+
+      // 3. Resolve warehouse for inventory reservation outside transaction
+      const defaultWarehouse = await prisma.warehouse.findFirst({
+        where: { isDefault: true, isActive: true },
+      });
+      const warehouseId = defaultWarehouse?.id || 'WH-DHK-01';
+
+      // 4. Calculate shipping charge outside transaction (avoids external DB reads inside tx)
+      const shippingResult = await defaultShippingCalculator.calculateShipping({
+        district: cartSnapshot.shippingAddress?.district,
+        deliveryMethodCode: cartSnapshot.deliveryMethod?.code,
+      });
+      const shippingTotalDec = new Decimal(shippingResult.shippingCharge);
+
+      // 5. Lookup coupon outside transaction if attached
+      let couponIdToConnect: string | null = null;
+      let discountTotalDec = new Decimal('0.00');
+
+      const rawCouponIdentifier =
+        (cartSnapshot as unknown as Record<string, unknown>).couponId ||
+        (cartSnapshot as unknown as Record<string, unknown>).couponCode;
+
+      if (rawCouponIdentifier) {
+        const coupon = await prisma.coupon.findFirst({
+          where: {
+            OR: [
+              { id: String(rawCouponIdentifier) },
+              { code: String(rawCouponIdentifier).trim().toUpperCase() },
+            ],
+            deletedAt: null,
+            isActive: true,
+          },
+        });
+
+        if (coupon) {
+          couponIdToConnect = coupon.id;
+          discountTotalDec = new Decimal((cartSnapshot as unknown as Record<string, unknown>).discount?.toString() || '0.00');
+        }
+      }
+
+      // 6. Resolve customer entity outside transaction
+      let customerId = session.userId;
+      if (!customerId) {
+        const customerInfo = cartSnapshot.customerInfo;
+        const phone = customerInfo?.phone?.trim();
+        const email = customerInfo?.email?.trim();
+
+        let guestUser = phone ? await prisma.user.findUnique({ where: { phone } }) : null;
+        if (!guestUser && email) {
+          guestUser = await prisma.user.findUnique({ where: { email } });
+        }
+
+        if (!guestUser) {
+          const dummySecret = crypto.randomBytes(24).toString('hex');
+          guestUser = await prisma.user.create({
+            data: {
+              name: customerInfo?.name?.trim() || 'Guest Customer',
+              phone: phone || null,
+              email: email || `guest_${Date.now()}_${crypto.randomBytes(4).toString('hex')}@diano.local`,
+              passwordHash: dummySecret,
+              status: 'PENDING_VERIFICATION',
+              isEmailVerified: false,
+              isPhoneVerified: false,
             },
           });
 
-          if (existing) {
-            const snapshot = existing.customerSnapshot as Record<string, unknown> | null;
-            const existingHash = snapshot?.payloadHash;
-            if (existingHash && existingHash !== input.payloadHash) {
-              throw AppError.conflict('Idempotency key already used with different payload');
-            }
-            return {
-              order: this.formatOrder(existing),
-              isIdempotentReplay: true,
-            };
+          const custRole = await prisma.role.findUnique({ where: { slug: 'customer' } });
+          if (custRole) {
+            await prisma.userRole.create({
+              data: {
+                userId: guestUser.id,
+                roleId: custRole.id,
+              },
+            });
           }
+        }
 
-          // 2. Session verification & lock check
-          const session = await tx.checkoutSession.findUnique({
+        customerId = guestUser.id;
+      }
+
+      // 7. Atomic transaction containing strictly critical mutations & stock reservations
+      return await prisma.$transaction(
+        async tx => {
+          // Re-verify checkout session within transaction to prevent race conditions
+          const activeSession = await tx.checkoutSession.findUnique({
             where: { id: input.checkoutSessionId },
           });
 
-          if (!session) {
-            throw AppError.notFound('Checkout session not found');
-          }
-          if (session.status === 'CONVERTED') {
+          if (!activeSession || activeSession.status === 'CONVERTED') {
             throw AppError.conflict('Checkout session has already been converted to an order');
           }
-          if (session.status === 'EXPIRED' || session.expiresAt < new Date()) {
-            throw AppError.badRequest('Checkout session has expired');
-          }
 
-          const cartSnapshot = session.cartSnapshot as unknown as CheckoutCartSnapshot;
-          if (!cartSnapshot || !Array.isArray(cartSnapshot.items) || cartSnapshot.items.length === 0) {
-            throw AppError.badRequest('Checkout session contains no items');
-          }
-
-          // 3. Resolve warehouse for inventory reservation
-          const defaultWarehouse = await tx.warehouse.findFirst({
-            where: { isDefault: true, isActive: true },
-          });
-          const warehouseId = defaultWarehouse?.id || 'WH-DHK-01';
-
-          // 4. Server-Side Recomputation: strictly re-read database pricing and check inventory
+          // Server-Side Recomputation: strictly re-read database pricing and check/reserve inventory
           let subtotalDec = new Decimal(0);
           const preparedItems: Array<{
             variantId: string;
@@ -443,38 +516,6 @@ export class OrdersRepository {
             });
           }
 
-          // 5. Recompute shipping, coupon, tax, and grand total
-          const shippingResult = await defaultShippingCalculator.calculateShipping({
-            district: cartSnapshot.shippingAddress?.district,
-            deliveryMethodCode: cartSnapshot.deliveryMethod?.code,
-          });
-          const shippingTotalDec = new Decimal(shippingResult.shippingCharge);
-
-          let couponIdToConnect: string | null = null;
-          let discountTotalDec = new Decimal('0.00');
-
-          const rawCouponIdentifier =
-            (cartSnapshot as unknown as Record<string, unknown>).couponId ||
-            (cartSnapshot as unknown as Record<string, unknown>).couponCode;
-
-          if (rawCouponIdentifier) {
-            const coupon = await tx.coupon.findFirst({
-              where: {
-                OR: [
-                  { id: String(rawCouponIdentifier) },
-                  { code: String(rawCouponIdentifier).trim().toUpperCase() },
-                ],
-                deletedAt: null,
-                isActive: true,
-              },
-            });
-
-            if (coupon) {
-              couponIdToConnect = coupon.id;
-              discountTotalDec = new Decimal((cartSnapshot as unknown as Record<string, unknown>).discount?.toString() || '0.00');
-            }
-          }
-
           const taxTotalDec = new Decimal('0.00');
 
           const grandTotalDec = subtotalDec
@@ -482,50 +523,10 @@ export class OrdersRepository {
             .plus(shippingTotalDec)
             .plus(taxTotalDec);
 
-          // 6. Resolve customer entity (Registered User vs Guest unactivated user)
-          let customerId = session.userId;
-          if (!customerId) {
-            const customerInfo = cartSnapshot.customerInfo;
-            const phone = customerInfo?.phone?.trim();
-            const email = customerInfo?.email?.trim();
-
-            let guestUser = phone ? await tx.user.findUnique({ where: { phone } }) : null;
-            if (!guestUser && email) {
-              guestUser = await tx.user.findUnique({ where: { email } });
-            }
-
-            if (!guestUser) {
-              const dummySecret = crypto.randomBytes(24).toString('hex');
-              guestUser = await tx.user.create({
-                data: {
-                  name: customerInfo?.name?.trim() || 'Guest Customer',
-                  phone: phone || null,
-                  email: email || `guest_${Date.now()}_${crypto.randomBytes(4).toString('hex')}@diano.local`,
-                  passwordHash: dummySecret,
-                  status: 'PENDING_VERIFICATION',
-                  isEmailVerified: false,
-                  isPhoneVerified: false,
-                },
-              });
-
-              const custRole = await tx.role.findUnique({ where: { slug: 'customer' } });
-              if (custRole) {
-                await tx.userRole.create({
-                  data: {
-                    userId: guestUser.id,
-                    roleId: custRole.id,
-                  },
-                });
-              }
-            }
-
-            customerId = guestUser.id;
-          }
-
-          // 7. Generate collision-safe unique order number
+          // Generate collision-safe unique order number
           const orderNumber = await this.getNextOrderNumber(tx);
 
-          // 8. Create Order, OrderItems, OrderStatusHistory, and Payment atomically
+          // Create Order, OrderItems, OrderStatusHistory, and Payment atomically
           const paymentMethod = (cartSnapshot.paymentMethod?.provider as PaymentProvider) || 'COD';
 
           const createdOrder = await tx.order.create({
@@ -616,7 +617,7 @@ export class OrdersRepository {
             });
           }
 
-          // 9. Mark checkout session as CONVERTED and emit checkout event
+          // Mark checkout session as CONVERTED and emit checkout event
           await tx.checkoutSession.update({
             where: { id: session.id },
             data: {
@@ -645,7 +646,7 @@ export class OrdersRepository {
             isIdempotentReplay: false,
           };
         },
-        { timeout: 35000, maxWait: 15000 },
+        { timeout: env.ORDER_TX_TIMEOUT_MS, maxWait: 10000 },
       );
     } catch (err: unknown) {
       // Handle unique constraint collision on idempotencyKey gracefully

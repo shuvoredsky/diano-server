@@ -52,6 +52,7 @@ const envSchema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Asia/Dhaka'),
   ORDER_PAYMENT_TIMEOUT_HOURS: z.coerce.number().positive().default(24),
   ORDER_RETURN_WINDOW_DAYS: z.coerce.number().positive().default(7),
+  ORDER_TX_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
 
   // External Integrations (Optional)
   STORAGE_DRIVER: z.enum(['local', 'cloudinary']).default('local'),

@@ -427,6 +427,70 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
       const updatedCoupon = await prisma.coupon.findUnique({ where: { id: createdCouponId } });
       expect(updatedCoupon?.usedCount).toBe(1);
     }, 60000);
+
+    it('concurrent checkout orders with usageLimit: 1 => exactly 1 succeeds and second fails (COUPON_EXHAUSTED)', async () => {
+      const limitedCode = `RACE1-${Date.now().toString().slice(-4)}`;
+      const limitCouponRes = await request(app)
+        .post('/api/v1/admin/coupons')
+        .set('Authorization', adminToken)
+        .send({
+          code: limitedCode,
+          type: 'FIXED',
+          value: '100.00',
+          minPurchase: '500.00',
+          startsAt: new Date(Date.now() - 3600000),
+          expiresAt: new Date(Date.now() + 86400000),
+          usageLimit: 1,
+          perUserLimit: 1,
+          isActive: true,
+        });
+      expect(limitCouponRes.status).toBe(201);
+      const couponId = limitCouponRes.body.data.id;
+      cleanupCouponIds.push(couponId);
+
+      // Create 2 checkout sessions referencing this coupon
+      const sessionIds = await Promise.all(
+        Array.from({ length: 2 }).map(async () => {
+          const sessId = await createCheckoutSession(testVariantId, 1);
+          const s = await prisma.checkoutSession.findUnique({ where: { sessionId: sessId } });
+          await prisma.checkoutSession.update({
+            where: { id: s!.id },
+            data: {
+              cartSnapshot: {
+                ...(s!.cartSnapshot as Record<string, unknown>),
+                couponId,
+                couponCode: limitedCode,
+                discount: '100.00',
+              } as unknown as Prisma.InputJsonValue,
+            },
+          });
+          return s!.id;
+        }),
+      );
+
+      // Submit 2 orders concurrently
+      const responses = await Promise.all(
+        sessionIds.map(sId =>
+          request(app)
+            .post('/api/v1/orders')
+            .set('Idempotency-Key', `race-coupon-${sId}-${Date.now()}`)
+            .send({ checkoutSessionId: sId }),
+        ),
+      );
+
+      const successful = responses.filter(r => r.status === 201);
+      const rejected = responses.filter(r => r.status === 400);
+
+      expect(successful.length).toBe(1);
+      expect(rejected.length).toBe(1);
+      for (const rej of rejected) {
+        expect(rej.body.message).toContain('Coupon usage limit reached');
+      }
+      cleanupOrderIds.push(successful[0].body.data.id);
+
+      const finalCoupon = await prisma.coupon.findUnique({ where: { id: couponId } });
+      expect(finalCoupon?.usedCount).toBe(1);
+    }, 60000);
   });
 
   // ==========================================
@@ -566,6 +630,29 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
       // 6. Verify Order paymentStatus is updated
       const finalOrder = await prisma.order.findUnique({ where: { id: deliveredOrderId } });
       expect(finalOrder?.paymentStatus).toBe('PARTIALLY_REFUNDED');
+
+      // 7. Duplicate refund replay with identical Idempotency-Key returns existing refund (idempotent)
+      const duplicateRefundRes = await request(app)
+        .post(`/api/v1/admin/returns/${returnRequestId}/refund`)
+        .set('Authorization', adminToken)
+        .set('Idempotency-Key', idempRefundKey)
+        .send({
+          reason: 'Customer return refund after inspection',
+        });
+      expect([200, 201]).toContain(duplicateRefundRes.status);
+      expect(duplicateRefundRes.body.data.id).toBe(refundRes.body.data.id);
+
+      // 8. Attempting refund exceeding remaining refundable balance is rejected with 400
+      const overlimitRes = await request(app)
+        .post(`/api/v1/admin/refunds/orders/${deliveredOrderId}/refunds`)
+        .set('Authorization', adminToken)
+        .set('Idempotency-Key', `idemp-overlimit-${Date.now()}`)
+        .send({
+          amount: '999999.00',
+          reason: 'Excessive refund test',
+        });
+      expect(overlimitRes.status).toBe(400);
+      expect(overlimitRes.body.message).toMatch(/exceeds/i);
     }, 60000);
   });
 });
