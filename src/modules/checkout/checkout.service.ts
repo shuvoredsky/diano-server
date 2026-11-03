@@ -22,7 +22,7 @@ import type {
 
 export const CHECKOUT_SESSION_TTL_MINUTES = Number(process.env.CHECKOUT_SESSION_TTL_MINUTES) || 30;
 export const CHECKOUT_PII_RETENTION_DAYS = Number(process.env.CHECKOUT_PII_RETENTION_DAYS) || 90;
-export const ENABLED_PAYMENT_PROVIDERS: PaymentMethodProvider[] = ['COD', 'SSLCOMMERZ', 'BKASH', 'NAGAD'];
+export const ENABLED_PAYMENT_PROVIDERS: PaymentMethodProvider[] = ['COD', 'SSLCOMMERZ'];
 
 export class CheckoutService {
   constructor(

@@ -109,7 +109,7 @@ export class RefundsService {
       // SSLCOMMERZ refund reference
       providerRefundId = `SSL-REF-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
     } else {
-      // Manual refund (COD, bKash/Nagad manual payout)
+      // Manual refund (e.g. COD cash return or manual bank transfer)
       providerRefundId = input.manualReference || `MAN-REF-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
     }
 

@@ -31,10 +31,11 @@ export class CheckoutController {
   private attachSecretToken(res: Response, secretToken?: string): void {
     if (!secretToken) return;
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie(CHECKOUT_SECRET_COOKIE_NAME, secretToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 2 * 60 * 60 * 1000, // 2 hours
     });
     res.setHeader('x-checkout-secret', secretToken);

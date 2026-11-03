@@ -68,7 +68,7 @@ The DIANO database is structured as a high-integrity relational model designed f
 - **`AppSequence`**: High-concurrency atomic counter sequence table (`DN-YYMMDD-XXXXX` for orders in Asia/Dhaka date, and `INV-YYMM-XXXXX` for invoices) preventing collisions and race conditions.
 
 ### H. Payments & Gateway Events (3 Models)
-- **`Payment`**: Master financial transaction record supporting SSLCOMMERZ, bKash, Nagad, and Cash-on-Delivery (COD). Unique constraint on `[provider, transactionId]`.
+- **`Payment`**: Master financial transaction record supporting SSLCOMMERZ and Cash-on-Delivery (COD). *Note: `BKASH` and `NAGAD` enum values remain in the Prisma schema strictly as future extensions and are out of scope for current releases (M10b removed).* Unique constraint on `[provider, transactionId]`.
   - **State Machine:** `INITIATED -> PENDING -> PAID | FAILED | CANCELLED | EXPIRED`.
   - **Irreversible Paid Rule:** Once `PAID`, a payment can NEVER revert to unpaid, failed, or cancelled states (only transitions to `REFUND_PENDING -> REFUNDED | PARTIALLY_REFUNDED`).
   - **Stock Commitment Rule:**

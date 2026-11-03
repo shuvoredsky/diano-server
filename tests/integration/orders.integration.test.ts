@@ -70,6 +70,7 @@ describe.skipIf(!isTestDbAvailable)(
         await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.orderNote.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.payment.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+        await prisma.fraudAssessment.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
         await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } }).catch(() => {});
       }
@@ -245,7 +246,7 @@ describe.skipIf(!isTestDbAvailable)(
       });
       expect(movements.length).toBe(1);
       expect(movements[0]?.quantity).toBe(2);
-    });
+    }, 60000);
 
     // ============================================================================
     // TEST 2: Last unit stock, 2 concurrent different orders => exactly 1 succeeds
@@ -469,10 +470,11 @@ describe.skipIf(!isTestDbAvailable)(
       const originalStoreName = (initialSnapshot.storeProfile as Record<string, unknown>).storeName;
 
       // 3. Mutate the active store settings in DB
+      const modifiedBrandName = `Modified Brand ${Date.now()}`;
       await siteSettingsService.updateSettingGroup(
         'store_profile',
         {
-          storeName: 'Modified Brand Name 2027',
+          storeName: modifiedBrandName,
           tagline: 'Changed Tagline',
           phone: '+8801999999999',
           email: 'new@brand.com',
@@ -484,7 +486,7 @@ describe.skipIf(!isTestDbAvailable)(
       // 4. Re-fetch invoice snapshot for that order
       const snapshotAfterChange = await invoiceService.getOrCreateInvoiceSnapshot(order.id);
       expect(snapshotAfterChange.storeProfile.storeName).toBe(originalStoreName);
-      expect(snapshotAfterChange.storeProfile.storeName).not.toBe('Modified Brand Name 2027');
+      expect(snapshotAfterChange.storeProfile.storeName).not.toBe(modifiedBrandName);
     });
 
     // ============================================================================

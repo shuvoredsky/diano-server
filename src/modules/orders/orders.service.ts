@@ -296,7 +296,7 @@ export class OrdersService {
           invoiceSnapshot: true,
         },
       });
-    });
+    }, { timeout: 25000, maxWait: 10000 });
 
     await this.audit.record({
       actorId: actorContext.id,

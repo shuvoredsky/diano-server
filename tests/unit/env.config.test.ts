@@ -36,4 +36,22 @@ describe('Environment Validation', () => {
 
     expect(() => validateEnv(invalidEnv)).toThrowError(/NODE_ENV|Invalid option|Invalid enum/);
   });
+
+  it('should reject payment providers other than COD and SSLCOMMERZ in PAYMENT_ENABLED_PROVIDERS', () => {
+    const invalidEnv = {
+      ...baseValidEnv,
+      PAYMENT_ENABLED_PROVIDERS: 'COD,SSLCOMMERZ,BKASH',
+    };
+
+    expect(() => validateEnv(invalidEnv)).toThrowError(/Invalid payment provider 'BKASH'/);
+  });
+
+  it('should reject JOBS_SECRET if shorter than 32 characters', () => {
+    const invalidEnv = {
+      ...baseValidEnv,
+      JOBS_SECRET: 'short-secret',
+    };
+
+    expect(() => validateEnv(invalidEnv)).toThrowError(/JOBS_SECRET must be at least 32 characters/);
+  });
 });

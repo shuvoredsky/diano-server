@@ -1469,7 +1469,7 @@ export const swaggerDocument = {
     '/api/v1/checkout/sessions/{id}/payment-method': {
       patch: {
         tags: ['Checkout'],
-        summary: 'Select payment provider (COD, SSLCOMMERZ, BKASH, NAGAD)',
+        summary: 'Select payment provider (COD, SSLCOMMERZ)',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 200: { description: 'Payment method selected' } },
       },
@@ -2069,7 +2069,7 @@ export const swaggerDocument = {
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
-          { name: 'provider', in: 'query', schema: { type: 'string', enum: ['SSLCOMMERZ', 'BKASH', 'NAGAD', 'COD'] } },
+          { name: 'provider', in: 'query', schema: { type: 'string', enum: ['SSLCOMMERZ', 'COD'] } },
           { name: 'status', in: 'query', schema: { type: 'string' } },
           { name: 'orderId', in: 'query', schema: { type: 'string' } },
         ],

@@ -645,7 +645,7 @@ export class OrdersRepository {
             isIdempotentReplay: false,
           };
         },
-        { timeout: 15000, maxWait: 10000 },
+        { timeout: 35000, maxWait: 15000 },
       );
     } catch (err: unknown) {
       // Handle unique constraint collision on idempotencyKey gracefully

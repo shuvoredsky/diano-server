@@ -783,7 +783,7 @@ export class PaymentsService {
               },
             },
           });
-        });
+        }, { timeout: 25000, maxWait: 10000 });
         cancelledCount++;
       } catch (err: unknown) {
         logger.error({ orderId: order.id, err }, 'Failed to cancel expired unpaid order');

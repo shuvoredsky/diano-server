@@ -6,11 +6,10 @@ import {
 } from '@/modules/payments/payments.state-machine';
 import { redactPaymentPayload } from '@/modules/payments/payments.redact';
 import { SslcommerzGateway } from '@/modules/payments/gateways/sslcommerz.gateway';
-import { StubGateway } from '@/modules/payments/gateways/stub.gateway';
 import { PaymentGatewayRegistry } from '@/modules/payments/gateways/gateway.registry';
 import { PaymentsService } from '@/modules/payments/payments.service';
 import type { PaymentsRepository } from '@/modules/payments/payments.repository';
-import type { PaymentGateway, GatewayInitializeInput } from '@/modules/payments/payments.types';
+import type { PaymentGateway } from '@/modules/payments/payments.types';
 import { prisma } from '@/config/database';
 import Decimal from 'decimal.js';
 import type { Prisma } from '@prisma/client';
@@ -90,7 +89,7 @@ describe('Payments Unit Test Suite', () => {
     });
   });
 
-  describe('Gateway Registry & Provider Stubs', () => {
+  describe('Gateway Registry & Supported Providers', () => {
     it('returns configured gateways for enabled providers', () => {
       const registry = new PaymentGatewayRegistry();
       const sslGateway = registry.getGateway('SSLCOMMERZ');
@@ -109,16 +108,13 @@ describe('Payments Unit Test Suite', () => {
       );
     });
 
-    it('bKash and Nagad stubs throw 501 Not Implemented and never simulate fake success', async () => {
-      const bkashStub = new StubGateway('BKASH');
-      const nagadStub = new StubGateway('NAGAD');
+    it('throws 400 Bad Request when requesting an unsupported provider', () => {
+      const registry = new PaymentGatewayRegistry();
+      vi.spyOn(registry, 'isProviderEnabled').mockReturnValue(true);
 
-      await expect(
-        bkashStub.initialize({} as unknown as GatewayInitializeInput),
-      ).rejects.toThrow(/is not yet implemented \(scheduled for M10b\)/);
-      await expect(
-        nagadStub.initialize({} as unknown as GatewayInitializeInput),
-      ).rejects.toThrow(/is not yet implemented \(scheduled for M10b\)/);
+      expect(() => registry.getGateway('UNKNOWN' as unknown as 'SSLCOMMERZ')).toThrow(
+        /Unsupported payment provider 'UNKNOWN'/,
+      );
     });
   });
 

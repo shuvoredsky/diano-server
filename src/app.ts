@@ -15,6 +15,9 @@ import { setupSwagger } from '@/docs/swagger';
 
 const app = express();
 
+// Trust Render reverse proxy (1 hop) so req.ip and rate limiters receive real client IP
+app.set('trust proxy', 1);
+
 // Request logging with Pino
 app.use(httpLogger);
 
@@ -35,7 +38,16 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-request-id',
+      'Idempotency-Key',
+      'x-cart-token',
+      'x-checkout-secret',
+      'x-jobs-secret',
+    ],
+    exposedHeaders: ['x-request-id', 'x-cart-token', 'x-checkout-secret'],
   }),
 );
 
@@ -54,6 +66,17 @@ app.use(requestIdMiddleware);
 
 // Base Rate Limiter
 app.use(baseRateLimiter);
+
+// Lightweight root health check for reverse proxy / Render liveness probe (never touches DB)
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    status: 'UP',
+    uptimeSeconds: process.uptime(),
+    timestamp: new Date().toISOString(),
+    environment: env.NODE_ENV,
+    appName: env.APP_NAME,
+  });
+});
 
 // API Version 1 Routes
 app.use(env.API_PREFIX, rootRouter);

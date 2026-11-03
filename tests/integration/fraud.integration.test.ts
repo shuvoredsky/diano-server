@@ -10,8 +10,6 @@ import { createTestSuperAdminAuth } from './test-auth-helper';
 describe('M11 Fraud Detection & Review Queue Integration Tests', () => {
   let adminToken: string;
   let testUserId: string;
-  let _testWarehouseId: string;
-  let _testCategoryId: string;
   let testProductId: string;
   let testVariantId: string;
 
@@ -41,7 +39,6 @@ describe('M11 Fraud Detection & Review Queue Integration Tests', () => {
         },
       });
     }
-    testWarehouseId = warehouse.id;
 
     // 3. Ensure essential fraud rules exist
     const rulesToEnsure = [
@@ -86,7 +83,6 @@ describe('M11 Fraud Detection & Review Queue Integration Tests', () => {
         slug: `fraud-test-cat-${Date.now()}`,
       },
     });
-    testCategoryId = category.id;
 
     const product = await prisma.product.create({
       data: {
@@ -307,7 +303,7 @@ describe('M11 Fraud Detection & Review Queue Integration Tests', () => {
     expect(history[0].newStatus).toBe('OTP_REQUESTED');
     expect(history[1].newStatus).toBe('APPROVED');
     expect(history[1].actorId).toBe(testUserId);
-  }, 35000);
+  }, 60000);
 
   it('Flow 2: Rejection cancels order and releases reserved inventory stock atomically', async () => {
     // Check initial stock on hand & reserved

@@ -7,11 +7,14 @@ node_modules/
 .env.*.local
 
 # Build output
+
 dist/
 build/
 
+
 # Testing & Coverage
 coverage/
+
 *.lcov
 
 # Uploads & Media storage

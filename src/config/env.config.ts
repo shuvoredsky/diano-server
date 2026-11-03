@@ -74,10 +74,30 @@ const envSchema = z.object({
   SSLCOMMERZ_IS_LIVE: z.preprocess(val => val === 'true' || val === true, z.boolean()).default(false),
   BACKEND_PUBLIC_URL: z.string().default('http://localhost:5000'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
+
+  // Render & Cross-Site Deployment Additions
+  CLIENT_URL: z.string().optional(),
+  ADMIN_URL: z.string().optional(),
+  JOBS_SECRET: z.string().min(32, 'JOBS_SECRET must be at least 32 characters long').optional(),
+  DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+  DB_CONNECTION_TIMEOUT_MS: z.coerce.number().positive().default(30000),
+  DIRECT_URL: z.string().optional(),
 }).superRefine((data, ctx) => {
   const enabled = (data.PAYMENT_ENABLED_PROVIDERS || 'COD,SSLCOMMERZ')
     .split(',')
-    .map(p => p.trim().toUpperCase());
+    .map(p => p.trim().toUpperCase())
+    .filter(Boolean);
+
+  const validProviders = ['COD', 'SSLCOMMERZ'];
+  for (const p of enabled) {
+    if (!validProviders.includes(p)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid payment provider '${p}' in PAYMENT_ENABLED_PROVIDERS. Only COD and SSLCOMMERZ are supported.`,
+        path: ['PAYMENT_ENABLED_PROVIDERS'],
+      });
+    }
+  }
 
   if (enabled.includes('SSLCOMMERZ') && data.NODE_ENV !== 'test') {
     if (!data.SSLCOMMERZ_STORE_ID) {
@@ -109,6 +129,16 @@ export const validateEnv = (customEnv: Record<string, unknown> = process.env): E
     throw new Error(`[Env Validation Error] Missing or invalid environment variables: ${errorDetails}`);
   }
 
+  // Production check: warn if Cloudinary credentials missing (fail upload on demand)
+  if (
+    result.data.NODE_ENV === 'production' &&
+    (!result.data.CLOUDINARY_CLOUD_NAME || !result.data.CLOUDINARY_API_KEY || !result.data.CLOUDINARY_API_SECRET)
+  ) {
+    console.warn(
+      '[Env Warning] Cloudinary credentials are missing in production. Media uploads will fail with 503 Service Unavailable.',
+    );
+  }
+
   return result.data;
 };
 
@@ -117,5 +147,15 @@ export const env = validateEnv();
 
 // Helper to get allowed CORS origins as an array
 export const getAllowedOrigins = (): string[] => {
-  return env.CORS_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean);
+  const origins = new Set<string>();
+  if (env.CORS_ORIGINS) {
+    env.CORS_ORIGINS.split(',').forEach(origin => {
+      const trimmed = origin.trim();
+      if (trimmed) origins.add(trimmed);
+    });
+  }
+  if (env.CLIENT_URL) origins.add(env.CLIENT_URL.trim());
+  if (env.ADMIN_URL) origins.add(env.ADMIN_URL.trim());
+  if (env.FRONTEND_URL) origins.add(env.FRONTEND_URL.trim());
+  return Array.from(origins);
 };

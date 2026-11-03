@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: diano-server
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: API_PREFIX
+        value: /api/v1
+      - key: APP_NAME
+        value: diano-server
+      - key: DEFAULT_CURRENCY
+        value: BDT
+      - key: DEFAULT_TIMEZONE
+        value: Asia/Dhaka
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: DB_CONNECTION_TIMEOUT_MS
+        value: "30000"
+      - key: PAYMENT_ENABLED_PROVIDERS
+        value: COD,SSLCOMMERZ
+      - key: SSLCOMMERZ_IS_LIVE
+        value: "false"
+
+      # Secrets & Environment-specific (Set in Render Dashboard - sync: false)
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: BACKEND_PUBLIC_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: ADMIN_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_RESET_PASSWORD_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        sync: false
+      - key: JOBS_SECRET
+        sync: false
+      - key: SSLCOMMERZ_STORE_ID
+        sync: false
+      - key: SSLCOMMERZ_STORE_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

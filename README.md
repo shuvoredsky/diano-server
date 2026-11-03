@@ -177,3 +177,65 @@ Because SSLCOMMERZ IPN notifications are server-to-server POST webhooks, SSLCOMM
 - **Replay Protection:** `PaymentEvent` enforces a unique database constraint on `(provider, eventId)` to eliminate duplicate processing.
 - **Strict Stock Commitment:** Stock reservation is committed exactly once upon payment confirmation within an atomic PostgreSQL transaction.
 
+---
+
+## 🚀 Production Deployment (Render + Neon + Cloudinary)
+
+### 1. Render Blueprint & Setup
+This repository includes a [`render.yaml`](./render.yaml) blueprint for one-click deployment as a Render Web Service.
+
+- **Service Type:** Web Service
+- **Runtime:** Node.js (`>=20.0.0`)
+- **Build Command:** `npm run build` (`prisma generate && tsc && tsc-alias`)
+- **Start Command:** `npm run start` (`node dist/server.js`)
+- **Health Check Path:** `/api/v1/health` (also available at `/health` for root liveness probes)
+- **Proxy Configuration:** `app.set('trust proxy', 1)` is enabled by default to trust Render's reverse proxy and capture real client IPs in rate limiters and logs.
+
+### 2. Database Migration Strategy (Strictly Manual/CI — Never on Startup)
+> [!IMPORTANT]
+> **Prisma migrations must NEVER run automatically on application startup in production.**
+> Render free-tier instances sleep after 15 minutes of inactivity. Running `prisma migrate deploy` at runtime can cause race conditions during horizontal scaling, increase cold-start latency, and exhaust pooled database connection limits.
+
+To deploy schema migrations to your Neon database:
+1. Run migrations manually from your local terminal or CI/CD pipeline using the unpooled `DIRECT_URL`:
+   ```bash
+   DIRECT_URL="postgresql://user:pass@ep-xyz.eastus2.azure.neon.tech/neondb?sslmode=require" npx prisma migrate deploy
+   ```
+2. Verify migration status:
+   ```bash
+   DIRECT_URL="postgresql://user:pass@ep-xyz.eastus2.azure.neon.tech/neondb?sslmode=require" npx prisma migrate status
+   ```
+
+### 3. Render Free Tier Limitations & Neon Cold Starts
+- **Render Free Tier Spin-Down:** Free web services sleep after 15 minutes of zero traffic. When an incoming request arrives, Render takes 30–60 seconds to spin up the container.
+- **Neon Serverless Cold Starts:** Neon free compute branches suspend after 5 minutes of inactivity. When resuming, connection handshakes may take 1–3 seconds.
+- **Connection Retry & Pool Sizing:**
+  - `DB_POOL_MAX` is configured to `5` by default to prevent exhausting Neon connection limits on free-tier instances.
+  - `DB_CONNECTION_TIMEOUT_MS` defaults to `30000` (30s).
+  - `checkDatabaseHealth` implements automatic exponential backoff retry to gracefully survive Neon cold-start wakeups.
+
+### 4. SSLCOMMERZ Public URLs & The Critical Need for Reconcile Jobs
+- **`BACKEND_PUBLIC_URL`:** In production, set this to your Render service URL (e.g. `https://diano-server.onrender.com`). SSLCOMMERZ will use this domain for success, fail, cancel redirects and asynchronous IPN callbacks.
+- **Why the Reconcile Job is Critical on Free Tier:**
+  If a customer completes payment while the Render container is sleeping or during a cold start, incoming SSLCOMMERZ IPN callbacks might time out or fail.
+  The internal maintenance job `POST /api/v1/internal/jobs/reconcile-payments` queries SSLCOMMERZ's order validation API for orphan pending transactions and synchronizes payment states reliably, ensuring zero lost orders.
+
+### 5. Scheduled Maintenance Jobs via External Cron (e.g. cron-job.org)
+Because Render free tier does not support persistent background daemons, scheduled tasks are triggered via HTTP using external cron services such as [cron-job.org](https://cron-job.org).
+
+- **Endpoint:** `POST https://diano-server.onrender.com/api/v1/internal/jobs/:name`
+- **Authentication Header:** `x-jobs-secret: <JOBS_SECRET>` (or `Authorization: Bearer <JOBS_SECRET>`)
+- **Security:** Requires a strong secret (`JOBS_SECRET` ≥ 32 characters) compared with constant-time equality. Fails closed (401) if unconfigured.
+- **Concurrency & Idempotency:** Guarded by PostgreSQL advisory locks (`pg_try_advisory_lock`). Overlapping triggers return `SKIPPED_ALREADY_RUNNING` without error.
+
+#### Recommended Schedule:
+| Job Name | Frequency | Recommended Provider | Purpose |
+| :--- | :--- | :--- | :--- |
+| `reconcile-payments` | Every 10–15 mins | cron-job.org | Resolves pending/stalled SSLCOMMERZ transactions, handles cold-start missed IPNs |
+| `cancel-expired-orders` | Every 30 mins | cron-job.org | Cancels unpaid orders past payment deadline and releases reserved inventory |
+| `classify-abandoned` | Every 15 mins | cron-job.org | Marks inactive checkout funnels (>30 min) as abandoned for analytics and recovery |
+| `release-expired-reservations` | Every 10 mins | cron-job.org | Releases expired variant stock reservations back into available inventory |
+| `cleanup-guest-carts` | Once daily (e.g. 03:00 UTC) | cron-job.org | Purges orphan guest carts older than 30 days |
+| `purge-checkout-pii` | Once daily (e.g. 04:00 UTC) | cron-job.org | Anonymizes customer PII from expired checkout sessions older than 90 days |
+
+

@@ -3,7 +3,6 @@ import { AppError } from '@/utils/app-error';
 import type { PaymentGateway, PaymentProvider } from '../payments.types';
 import { sslcommerzGateway } from './sslcommerz.gateway';
 import { codGateway } from './cod.gateway';
-import { bkashStubGateway, nagadStubGateway } from './stub.gateway';
 
 export class PaymentGatewayRegistry {
   private readonly gateways: Map<PaymentProvider, PaymentGateway> = new Map();
@@ -11,8 +10,6 @@ export class PaymentGatewayRegistry {
   constructor() {
     this.registerGateway('SSLCOMMERZ', sslcommerzGateway);
     this.registerGateway('COD', codGateway);
-    this.registerGateway('BKASH', bkashStubGateway);
-    this.registerGateway('NAGAD', nagadStubGateway);
   }
 
   registerGateway(provider: PaymentProvider, gateway: PaymentGateway): void {

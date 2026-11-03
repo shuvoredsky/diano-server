@@ -13,7 +13,7 @@ export type PaymentStatus =
   | 'REFUNDED'
   | 'PARTIALLY_REFUNDED';
 
-export type PaymentProvider = 'SSLCOMMERZ' | 'BKASH' | 'NAGAD' | 'COD';
+export type PaymentProvider = 'SSLCOMMERZ' | 'COD';
 
 export type RefundStatus =
   | 'PENDING'

@@ -9,7 +9,7 @@ export type CheckoutEventType =
   | 'CHECKOUT_ABANDONED'
   | 'ORDER_PLACED';
 
-export type PaymentMethodProvider = 'COD' | 'SSLCOMMERZ' | 'BKASH' | 'NAGAD';
+export type PaymentMethodProvider = 'COD' | 'SSLCOMMERZ';
 
 export interface CheckoutSnapshotItem {
   variantId: string;

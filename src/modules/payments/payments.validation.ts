@@ -18,7 +18,7 @@ export const markCodCollectedSchema = z.object({
 export const listPaymentsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  provider: z.enum(['SSLCOMMERZ', 'BKASH', 'NAGAD', 'COD']).optional(),
+  provider: z.enum(['SSLCOMMERZ', 'COD']).optional(),
   status: z
     .enum([
       'INITIATED',

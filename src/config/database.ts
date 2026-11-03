@@ -11,9 +11,9 @@ const activeDbUrl =
 
 export const pgPool = new Pool({
   connectionString: activeDbUrl,
-  connectionTimeoutMillis: 25000,
+  connectionTimeoutMillis: env.DB_CONNECTION_TIMEOUT_MS,
   idleTimeoutMillis: 30000,
-  max: 20,
+  max: env.DB_POOL_MAX,
 });
 
 // Suppress unhandled pool error events when Postgres is offline
@@ -40,21 +40,37 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 /**
- * Checks PostgreSQL database connection health safely without throwing unhandled rejection
+ * Checks PostgreSQL database connection health safely with retry for Neon cold starts/idle disconnects
  */
-export const checkDatabaseHealth = async (): Promise<{ isConnected: boolean; message: string }> => {
-  try {
-    const client = await pgPool.connect();
+export const checkDatabaseHealth = async (
+  retries = 2,
+  delayMs = 1000,
+): Promise<{ isConnected: boolean; message: string }> => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      await client.query('SELECT 1');
-      return { isConnected: true, message: 'Database connection is healthy' };
-    } finally {
-      client.release();
+      const client = await pgPool.connect();
+      try {
+        await client.query('SELECT 1');
+        return { isConnected: true, message: 'Database connection is healthy' };
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown database error';
+      if (attempt < retries) {
+        if (env.NODE_ENV !== 'test') {
+          logger.warn(
+            { attempt: attempt + 1, error: errorMsg },
+            'Retrying database connection (handling possible Neon cold start/idle disconnect)...',
+          );
+        }
+        await new Promise(res => setTimeout(res, delayMs * Math.pow(2, attempt)));
+      } else {
+        return { isConnected: false, message: `Database disconnected: ${errorMsg}` };
+      }
     }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown database error';
-    return { isConnected: false, message: `Database disconnected: ${errorMsg}` };
   }
+  return { isConnected: false, message: 'Database connection failed after retries' };
 };
 
 /**

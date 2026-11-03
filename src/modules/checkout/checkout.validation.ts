@@ -30,8 +30,8 @@ export const deliveryMethodSchema = z
 
 export const paymentMethodSchema = z
   .object({
-    provider: z.enum(['COD', 'SSLCOMMERZ', 'BKASH', 'NAGAD'] as const, {
-      message: 'Invalid payment provider. Allowed: COD, SSLCOMMERZ, BKASH, NAGAD',
+    provider: z.enum(['COD', 'SSLCOMMERZ'] as const, {
+      message: 'Invalid payment provider. Allowed: COD, SSLCOMMERZ',
     }),
   })
   .strict();

@@ -135,6 +135,11 @@ export class LocalDiskAdapter implements IStorageAdapter {
   private baseDir: string;
 
   constructor(baseDir = path.resolve(process.cwd(), 'uploads')) {
+    if (env.NODE_ENV === 'production') {
+      throw AppError.internal(
+        'LocalDiskAdapter is disabled in production. Ephemeral disk on Render causes data loss. Use Cloudinary storage.',
+      );
+    }
     this.baseDir = baseDir;
   }
 
@@ -288,7 +293,7 @@ export class StorageService {
   constructor(customAdapter?: IStorageAdapter) {
     if (customAdapter) {
       this.adapter = customAdapter;
-    } else if (env.STORAGE_DRIVER === 'cloudinary') {
+    } else if (env.STORAGE_DRIVER === 'cloudinary' || env.NODE_ENV === 'production') {
       this.adapter = new CloudinaryAdapter();
     } else {
       this.adapter = new LocalDiskAdapter();

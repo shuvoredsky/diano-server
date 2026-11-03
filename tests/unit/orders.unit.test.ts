@@ -79,7 +79,6 @@ describe('Orders & Invoice Unit Tests', () => {
     it('should enforce that customers can only cancel PENDING COD orders', () => {
       expect(canCustomerCancel({ status: 'PENDING', paymentMethod: 'COD' })).toBe(true);
       expect(canCustomerCancel({ status: 'CONFIRMED', paymentMethod: 'COD' })).toBe(false);
-      expect(canCustomerCancel({ status: 'PENDING', paymentMethod: 'BKASH' })).toBe(false);
       expect(canCustomerCancel({ status: 'PENDING', paymentMethod: 'SSLCOMMERZ' })).toBe(false);
     });
   });

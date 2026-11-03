@@ -33,11 +33,15 @@ import {
 } from '@/modules/coupons/coupons.routes';
 import { customerReturnsRouter, adminReturnsRouter } from '@/modules/returns/returns.routes';
 import { adminRefundsRouter } from '@/modules/refunds/refunds.routes';
+import { internalJobsRouter } from '@/modules/internal/internal-jobs.routes';
 
 const rootRouter = Router();
 
 // Root health and readiness probes
 rootRouter.use('/', healthRouter);
+
+// Internal scheduled maintenance jobs
+rootRouter.use('/internal', internalJobsRouter);
 
 // Authentication & Identity
 rootRouter.use('/auth', authRouter);
