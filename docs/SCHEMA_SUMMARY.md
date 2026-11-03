@@ -319,4 +319,32 @@ ALTER TABLE "StockAuditItem"
    - Capped at maximum 2 recovery attempts per session with a 2-hour cooldown.
    - `purgeExpiredCheckoutPii(olderThan)` anonymizes customer PII after 90 days while retaining session and event records for historical funnel analytics.
 
+---
+
+## 9. Analytics, Reports & Expense Ledger (M13)
+
+1. **Operating Expenses Ledger (`Expense` Model):**
+   - Tracks operational overheads (`RENT`, `SALARIES`, `UTILITIES`, `MARKETING`, `PACKAGING`, `LOGISTICS`, `OFFICE_SUPPLIES`, `SOFTWARE_SUBSCRIPTION`, `MAINTENANCE`, `OTHER`).
+   - Fields: `id`, `category`, `amount` (Decimal 12,2), `date` (DateTime), `note`, `createdBy` (FK User).
+   - Indexed on `date`, `category`, and composite `[category, date]` for rapid periodic aggregations.
+   - Admin CRUD with `expense:manage` permission and comprehensive AuditLog tracking.
+
+2. **Analytics Aggregations & Database Indexes:**
+   - Pure PostgreSQL aggregations via `GROUP BY`, `date_trunc AT TIME ZONE 'Asia/Dhaka'`, `SUM`, and `COUNT`.
+   - Optimized indexes:
+     - `Order(deliveredAt)`
+     - `Order(status, placedAt)`
+     - `Refund(completedAt)`
+     - `Refund(status, completedAt)`
+     - `Refund(createdAt)`
+     - `CheckoutEvent(occurredAt)`
+     - `CheckoutEvent(type, occurredAt)`
+     - `Expense(date)`
+     - `Expense(category)`
+     - `Expense(category, date)`
+
+3. **Payment Providers Scope Notice:**
+   - Current active providers: strictly `COD` and `SSLCOMMERZ`.
+   - `BKASH` and `NAGAD` enum values remain in `PaymentProvider` to avoid unnecessary schema migrations, but are completely disabled in application runtime, rejected by Zod validation, and reserved strictly for future extension.
+
 

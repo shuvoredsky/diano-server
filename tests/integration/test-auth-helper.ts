@@ -105,3 +105,96 @@ export async function createTestCustomerAuth(): Promise<{
   return { token, userId: user.id, sessionId: session.id };
 }
 
+export async function createTestUserWithPermissions(
+  roleSlug: string,
+  permissionSlugs: string[],
+): Promise<{
+  token: string;
+  userId: string;
+  sessionId: string;
+}> {
+  // 1. Ensure permissions exist
+  const permIds: string[] = [];
+  for (const slug of permissionSlugs) {
+    const parts = slug.split(':');
+    const resource = parts[0] || 'test';
+    const action = parts[1] || 'manage';
+
+    const perm = await prisma.permission.upsert({
+      where: { slug },
+      update: {},
+      create: {
+        name: slug,
+        slug,
+        resource,
+        action,
+        description: `Test permission for ${slug}`,
+      },
+    });
+    permIds.push(perm.id);
+  }
+
+  // 2. Create or update role
+  const role = await prisma.role.upsert({
+    where: { slug: roleSlug },
+    update: {},
+    create: {
+      name: roleSlug,
+      slug: roleSlug,
+      description: `Test role ${roleSlug}`,
+      isSystem: false,
+    },
+  });
+
+  // 3. Link permissions to role
+  for (const permId of permIds) {
+    await prisma.rolePermission.upsert({
+      where: {
+        roleId_permissionId: {
+          roleId: role.id,
+          permissionId: permId,
+        },
+      },
+      update: {},
+      create: {
+        roleId: role.id,
+        permissionId: permId,
+      },
+    });
+  }
+
+  // 4. Create user
+  const email = `test_${roleSlug}_${Date.now()}_${Math.floor(Math.random() * 10000)}@diano.internal`;
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name: `Test User ${roleSlug}`,
+      passwordHash: 'dummy_hash',
+      status: 'ACTIVE',
+      roles: {
+        create: {
+          roleId: role.id,
+        },
+      },
+    },
+  });
+
+  // 5. Session and token
+  const session = await prisma.session.create({
+    data: {
+      userId: user.id,
+      tokenHash: `test_session_hash_${Date.now()}_${Math.random()}`,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      isRevoked: false,
+    },
+  });
+
+  const token = generateAccessToken({
+    userId: user.id,
+    email: user.email,
+    roles: [roleSlug],
+    sessionId: session.id,
+  });
+
+  return { token, userId: user.id, sessionId: session.id };
+}

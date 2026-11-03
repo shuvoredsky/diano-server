@@ -33,6 +33,9 @@ import {
 } from '@/modules/coupons/coupons.routes';
 import { customerReturnsRouter, adminReturnsRouter } from '@/modules/returns/returns.routes';
 import { adminRefundsRouter } from '@/modules/refunds/refunds.routes';
+import { adminExpensesRouter } from '@/modules/expenses/expenses.routes';
+import { adminAnalyticsRouter } from '@/modules/analytics/analytics.routes';
+import { adminReportsRouter } from '@/modules/reports/reports.routes';
 import { internalJobsRouter } from '@/modules/internal/internal-jobs.routes';
 
 const rootRouter = Router();
@@ -121,6 +124,15 @@ rootRouter.use('/', customerReturnsRouter);
 
 // Refunds (Admin)
 rootRouter.use('/admin/refunds', adminRefundsRouter);
+
+// Expenses (Admin)
+rootRouter.use('/admin/expenses', adminExpensesRouter);
+
+// Analytics (Admin)
+rootRouter.use('/admin/analytics', adminAnalyticsRouter);
+
+// Reports (Admin)
+rootRouter.use('/admin/reports', adminReportsRouter);
 
 export { rootRouter };
 

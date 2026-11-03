@@ -335,7 +335,7 @@ export class OrdersRepository {
       // 1. Idempotency pre-check outside transaction to avoid holding locks on duplicate requests
       const existingPre = await this.findByIdempotencyKey(input.idempotencyKey);
       if (existingPre) {
-        const snapshot = existingPre.customerSnapshot as Record<string, unknown> | null;
+        const snapshot = existingPre.customerSnapshot as unknown as Record<string, unknown> | null;
         const existingHash = snapshot?.payloadHash;
         if (existingHash && existingHash !== input.payloadHash) {
           throw AppError.conflict('Idempotency key already used with different payload');

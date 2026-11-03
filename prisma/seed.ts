@@ -103,6 +103,10 @@ export const permissionsData = [
 
   // Analytics & Audits
   { resource: 'analytics', action: 'view', name: 'View Analytics', slug: 'analytics:view', description: 'View sales and revenue metrics' },
+  { resource: 'analytics', action: 'view_finance', name: 'View Financial Analytics', slug: 'analytics:view_finance', description: 'View cost, margins, gross and net profit' },
+  { resource: 'report', action: 'export', name: 'Export Reports', slug: 'report:export', description: 'Export tabular reports to CSV, XLSX, and PDF' },
+  { resource: 'report', action: 'export_pii', name: 'Export Customer PII in Reports', slug: 'report:export_pii', description: 'Include customer phone, email, and address in report exports' },
+  { resource: 'expense', action: 'manage', name: 'Manage Operating Expenses', slug: 'expense:manage', description: 'Create, update, view, and delete business expenses' },
   { resource: 'audit', action: 'view', name: 'View Audit Logs', slug: 'audit:view', description: 'Inspect system and security audit logs' },
   { resource: 'settings', action: 'read', name: 'Read Settings', slug: 'settings:read', description: 'View system and store configuration' },
   { resource: 'settings', action: 'update', name: 'Update Settings', slug: 'settings:update', description: 'Modify global store settings' },
@@ -215,6 +219,9 @@ export async function seedDatabase() {
       'review:read',
       'review:moderate',
       'analytics:view',
+      'analytics:view_finance',
+      'report:export',
+      'expense:manage',
       'settings:read',
       'banner:manage',
       'page:manage',

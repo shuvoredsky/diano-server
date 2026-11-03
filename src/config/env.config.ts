@@ -83,6 +83,10 @@ const envSchema = z.object({
   DB_POOL_MAX: z.coerce.number().int().positive().default(5),
   DB_CONNECTION_TIMEOUT_MS: z.coerce.number().positive().default(30000),
   DIRECT_URL: z.string().optional(),
+
+  // Analytics & Reports
+  ANALYTICS_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
+  REPORT_MAX_ROWS: z.coerce.number().int().positive().default(20000),
 }).superRefine((data, ctx) => {
   const enabled = (data.PAYMENT_ENABLED_PROVIDERS || 'COD,SSLCOMMERZ')
     .split(',')

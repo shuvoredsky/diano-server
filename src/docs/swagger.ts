@@ -2129,6 +2129,139 @@ export const swaggerDocument = {
         responses: { 200: { description: 'COD payment marked collected' } },
       },
     },
+    // -------------------------------------------------------------------------
+    // EXPENSES & ANALYTICS (M13)
+    // -------------------------------------------------------------------------
+    '/api/v1/admin/expenses': {
+      get: {
+        tags: ['Admin Expenses'],
+        summary: 'List operating expenses with filtering',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'List of expenses' } },
+      },
+      post: {
+        tags: ['Admin Expenses'],
+        summary: 'Create a new operating expense',
+        security: [{ BearerAuth: [] }],
+        responses: { 201: { description: 'Expense created' } },
+      },
+    },
+    '/api/v1/admin/analytics/overview': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: '12 KPI cards overview with period comparison',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Overview KPI cards' } },
+      },
+    },
+    '/api/v1/admin/analytics/revenue': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Detailed revenue, discounts, cogs, profit breakdown',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Revenue metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/orders': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Order status breakdown, fulfillment SLA, cancellation rates',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Order metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/products': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Top selling, worst selling, returns, and dead stock',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Product metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/inventory': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Inventory valuation, stockouts, low stock counts',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Inventory metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/customers': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Customer retention, CLV, top spenders, district distribution',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Customer metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/payments': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Payment provider metrics, fees, pending COD collection',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Payment metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/funnel': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Checkout session conversion funnel with drop-off rates',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Funnel metrics' } },
+      },
+    },
+    '/api/v1/admin/analytics/charts/{type}': {
+      get: {
+        tags: ['Admin Analytics'],
+        summary: 'Gap-filled chart time-series and distributions',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'type', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Chart series' } },
+      },
+    },
+    // -------------------------------------------------------------------------
+    // REPORTS (M13)
+    // -------------------------------------------------------------------------
+    '/api/v1/admin/reports/orders': {
+      post: {
+        tags: ['Admin Reports'],
+        summary: 'Export orders report as CSV, XLSX, or PDF',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Streaming export file' } },
+      },
+    },
+    '/api/v1/admin/reports/sales': {
+      post: {
+        tags: ['Admin Reports'],
+        summary: 'Export sales report aggregated by day, week, or month',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Streaming export file' } },
+      },
+    },
+    '/api/v1/admin/reports/inventory': {
+      post: {
+        tags: ['Admin Reports'],
+        summary: 'Export inventory stock valuation report',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Streaming export file' } },
+      },
+    },
+    '/api/v1/admin/reports/customers': {
+      post: {
+        tags: ['Admin Reports'],
+        summary: 'Export customer spending and order volume report',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Streaming export file' } },
+      },
+    },
+    '/api/v1/admin/reports/financial': {
+      post: {
+        tags: ['Admin Reports'],
+        summary: 'Export financial statement summary (requires analytics:view_finance)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Streaming export file' } },
+      },
+    },
   },
 };
 

@@ -244,6 +244,19 @@ enum DiscountType {
   FIXED
 }
 
+enum ExpenseCategory {
+  RENT
+  SALARIES
+  UTILITIES
+  MARKETING
+  PACKAGING
+  LOGISTICS
+  OFFICE_SUPPLIES
+  SOFTWARE_SUBSCRIPTION
+  MAINTENANCE
+  OTHER
+}
+
 // ==============================================================================
 // AUTHENTICATION & RBAC
 // ==============================================================================
@@ -285,6 +298,7 @@ model User {
   productViews           ProductView[]
   emailTokens            EmailVerificationToken[]
   passwordResetTokens    PasswordResetToken[]
+  expenses               Expense[]
 
   @@index([email])
   @@index([phone])
@@ -946,6 +960,8 @@ model CheckoutEvent {
 
   @@index([checkoutSessionId])
   @@index([type])
+  @@index([occurredAt])
+  @@index([type, occurredAt])
 }
 
 model RecoveryAttempt {
@@ -995,8 +1011,8 @@ model Order {
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 
-  customer        User                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  coupon          Coupon?              @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  customer        User                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  coupon          Coupon?               @relation(fields: [couponId], references: [id], onDelete: SetNull)
   couponUsage     CouponUsage?
   items           OrderItem[]
   statusHistory   OrderStatusHistory[]
@@ -1014,6 +1030,8 @@ model Order {
   @@index([placedAt])
   @@index([paymentDeadline])
   @@index([orderNumber])
+  @@index([deliveredAt])
+  @@index([status, placedAt])
 }
 
 model OrderItem {
@@ -1126,6 +1144,7 @@ model Refund {
   providerRefundId String?
   idempotencyKey   String?      @unique
   processedAt      DateTime?
+  completedAt      DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -1135,6 +1154,9 @@ model Refund {
   @@index([paymentId])
   @@index([orderId])
   @@index([status])
+  @@index([completedAt])
+  @@index([status, completedAt])
+  @@index([createdAt])
 }
 
 // ==============================================================================
@@ -1548,19 +1570,19 @@ model Banner {
 }
 
 model Page {
-  id              String         @id @default(cuid())
-  slug            String         @unique
-  type            PageType       @default(CUSTOM)
+  id              String     @id @default(cuid())
+  slug            String     @unique
+  type            PageType   @default(CUSTOM)
   title           String
-  content         Json           @default("[]")
+  content         Json       @default("[]")
   metaTitle       String?
   metaDescription String?
   ogImage         String?
-  status          PageStatus     @default(DRAFT)
+  status          PageStatus @default(DRAFT)
   publishedAt     DateTime?
-  version         Int            @default(1)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  version         Int        @default(1)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   revisions PageRevision[]
 
@@ -1637,4 +1659,25 @@ model ProductView {
 
   @@index([productId, viewedAt])
   @@index([userId])
+}
+
+// ==============================================================================
+// EXPENSES & FINANCIAL RECORDING (M13)
+// ==============================================================================
+
+model Expense {
+  id        String          @id @default(cuid())
+  category  ExpenseCategory
+  amount    Decimal         @db.Decimal(12, 2)
+  date      DateTime
+  note      String?
+  createdBy String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([date])
+  @@index([category])
+  @@index([category, date])
 }
