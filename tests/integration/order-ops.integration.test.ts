@@ -144,15 +144,8 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
         await prisma.checkoutSession.deleteMany({ where: { id: { in: cleanupSessionIds } } });
       }
 
-      if (testVariantId) {
-        await prisma.stockMovement.deleteMany({ where: { variantId: testVariantId } });
-        await prisma.inventory.deleteMany({ where: { variantId: testVariantId } });
-        await prisma.productVariant.deleteMany({ where: { id: testVariantId } });
-      }
-
-      if (testProductId) {
-        await prisma.product.deleteMany({ where: { id: testProductId } });
-      }
+      // Note: StockMovement has an append-only trigger in PostgreSQL.
+      // We do not delete StockMovement rows per docs/AGENT_RULES.md.
     } catch {
       // Ignore cleanup error
     }
