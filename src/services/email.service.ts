@@ -1,4 +1,4 @@
-import { env } from '@/config/env.config';
+import { notificationsService } from '@/modules/notifications/notifications.service';
 import { logger } from '@/utils/logger';
 
 export interface IEmailService {
@@ -7,33 +7,41 @@ export interface IEmailService {
   sendOtpEmail(to: string, otp: string, purpose: string): Promise<void>;
 }
 
-export class ConsoleEmailService implements IEmailService {
+/**
+ * Unified EmailService delegating to the notifications module.
+ * Eliminates duplicate email dispatch logic and protects secrets/tokens from logs.
+ */
+export class UnifiedEmailService implements IEmailService {
   async sendVerificationEmail(to: string, token: string): Promise<void> {
-    const verificationUrl = `https://diano.com/verify-email?token=${token}`;
-    if (env.NODE_ENV !== 'production') {
-      logger.info({ to, token, verificationUrl }, '[DEV EMAIL] Verification email dispatched');
-    } else {
-      logger.info({ to }, '[EMAIL] Verification email sent');
-    }
+    logger.info({ to: to.slice(0, 3) + '***' }, '[EMAIL] Verification email queued');
+    await notificationsService.sendImmediate({
+      channel: 'EMAIL',
+      recipient: to,
+      template: 'email_verification',
+      data: { token },
+    });
   }
 
   async sendPasswordResetEmail(to: string, token: string): Promise<void> {
-    const resetUrl = `https://diano.com/reset-password?token=${token}`;
-    if (env.NODE_ENV !== 'production') {
-      logger.info({ to, token, resetUrl }, '[DEV EMAIL] Password reset email dispatched');
-    } else {
-      logger.info({ to }, '[EMAIL] Password reset email sent');
-    }
+    logger.info({ to: to.slice(0, 3) + '***' }, '[EMAIL] Password reset email queued');
+    await notificationsService.sendImmediate({
+      channel: 'EMAIL',
+      recipient: to,
+      template: 'password_reset',
+      data: { token },
+    });
   }
 
   async sendOtpEmail(to: string, otp: string, purpose: string): Promise<void> {
-    if (env.NODE_ENV !== 'production') {
-      logger.info({ to, otp, purpose }, '[DEV EMAIL] OTP email dispatched');
-    } else {
-      logger.info({ to, purpose }, '[EMAIL] OTP email sent');
-    }
+    logger.info({ to: to.slice(0, 3) + '***', purpose }, '[EMAIL] OTP email queued');
+    await notificationsService.sendImmediate({
+      channel: 'EMAIL',
+      recipient: to,
+      template: 'otp_code',
+      data: { otp, purpose },
+    });
   }
 }
 
 // Singleton default instance
-export const emailService: IEmailService = new ConsoleEmailService();
+export const emailService: IEmailService = new UnifiedEmailService();

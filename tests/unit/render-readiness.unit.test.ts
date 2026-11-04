@@ -121,14 +121,16 @@ describe('Render Deploy Readiness Unit Tests', () => {
   });
 
   describe('Internal Maintenance Jobs Middleware & Allowlist', () => {
-    it('contains all 6 required job names in allowlist', () => {
+    it('contains all required job names in allowlist', () => {
       expect(INTERNAL_JOB_NAMES).toContain('classify-abandoned');
       expect(INTERNAL_JOB_NAMES).toContain('reconcile-payments');
       expect(INTERNAL_JOB_NAMES).toContain('cancel-expired-orders');
       expect(INTERNAL_JOB_NAMES).toContain('cleanup-guest-carts');
       expect(INTERNAL_JOB_NAMES).toContain('release-expired-reservations');
       expect(INTERNAL_JOB_NAMES).toContain('purge-checkout-pii');
-      expect(INTERNAL_JOB_NAMES.length).toBe(6);
+      expect(INTERNAL_JOB_NAMES).toContain('process-notifications');
+      expect(INTERNAL_JOB_NAMES).toContain('purge-old-notifications');
+      expect(INTERNAL_JOB_NAMES.length).toBe(8);
     });
 
     it('fails closed with 401 when JOBS_SECRET is unset or shorter than 32 characters', () => {

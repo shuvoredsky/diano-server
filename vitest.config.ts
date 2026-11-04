@@ -7,8 +7,8 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30000,
     hookTimeout: 30000,
-    maxWorkers: 4,
-    minWorkers: 1,
+    fileParallelism: false,
+    maxWorkers: 1,
     env: {
       BCRYPT_ROUNDS: '4',
       NODE_ENV: 'test',

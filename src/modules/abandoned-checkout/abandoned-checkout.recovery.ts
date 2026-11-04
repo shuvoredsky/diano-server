@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '@/config/database';
 import { AppError } from '@/utils/app-error';
 import { checkoutRepository } from '@/modules/checkout/checkout.repository';
+import { isDhakaQuietHours } from '@/modules/notifications/notifications.utils';
 import type {
   IRecoveryAdapter,
   IRecoveryService,
@@ -56,7 +57,33 @@ export class RecoveryService implements IRecoveryService {
       throw AppError.badRequest('No customer contact details available to send recovery message.');
     }
 
-    // 1. Consent Verification (Reusing ConsentRecord)
+    // 1. Quiet Hours check for SMS/WhatsApp (Asia/Dhaka 9pm - 9am)
+    if (channel === 'SMS' && isDhakaQuietHours()) {
+      throw AppError.badRequest(
+        'Recovery message suppressed: quiet hours in Asia/Dhaka (9:00 PM - 9:00 AM).',
+      );
+    }
+
+    // 2. Notification Preferences check for registered users
+    if (session.userId) {
+      try {
+        const pref = await prisma.notificationPreference?.findUnique({
+          where: { userId: session.userId },
+        });
+        if (pref) {
+          if (channel === 'SMS' && (!pref.smsRecovery || !pref.smsMarketing)) {
+            throw AppError.badRequest('Recovery message cannot be dispatched: user opted out in preferences.');
+          }
+          if (channel === 'EMAIL' && !pref.emailMarketing) {
+            throw AppError.badRequest('Recovery message cannot be dispatched: user opted out in preferences.');
+          }
+        }
+      } catch (err: unknown) {
+        if (err instanceof AppError) throw err;
+      }
+    }
+
+    // 3. Consent Verification (Reusing ConsentRecord)
     let consentRecordId: string | null = null;
     try {
       const consent = await prisma.consentRecord.findFirst({

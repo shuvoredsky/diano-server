@@ -5,6 +5,8 @@ export const INTERNAL_JOB_NAMES = [
   'cleanup-guest-carts',
   'release-expired-reservations',
   'purge-checkout-pii',
+  'process-notifications',
+  'purge-old-notifications',
 ] as const;
 
 export type InternalJobName = (typeof INTERNAL_JOB_NAMES)[number];

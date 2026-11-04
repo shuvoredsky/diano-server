@@ -6,6 +6,7 @@ import { paymentsService } from '@/modules/payments/payments.service';
 import { cartService } from '@/modules/cart/cart.service';
 import { inventoryService } from '@/modules/inventory/inventory.service';
 import { checkoutService } from '@/modules/checkout/checkout.service';
+import { notificationsService } from '@/modules/notifications/notifications.service';
 import type { InternalJobName, JobExecutionResult } from './internal-jobs.types';
 
 export class InternalJobsService {
@@ -41,6 +42,20 @@ export class InternalJobsService {
         const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days
         const count = await checkoutService.purgeExpiredCheckoutPii(cutoff);
         return { purgedSessionsCount: count };
+      }
+      case 'process-notifications': {
+        const result = await notificationsService.processNotificationQueue();
+        return {
+          processed: result.processed,
+          sent: result.sent,
+          failed: result.failed,
+          dead: result.dead,
+          deferredQuietHours: result.deferredQuietHours,
+        };
+      }
+      case 'purge-old-notifications': {
+        const count = await notificationsService.purgeOldNotifications(180);
+        return { purgedNotificationsCount: count };
       }
     }
   }

@@ -67,6 +67,10 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().optional().default('noreply@diano.com'),
+  NOTIFICATION_EMAIL_PROVIDER: z.enum(['console', 'smtp', 'resend', 'brevo']).default('console'),
+  RESEND_API_KEY: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
+  NOTIFY_TEST_EMAIL: z.string().email().optional(),
 
   // Payment Gateway Configuration
   PAYMENT_ENABLED_PROVIDERS: z.string().default('COD,SSLCOMMERZ'),

@@ -105,8 +105,8 @@ The DIANO database is structured as a high-integrity relational model designed f
 - **`ReviewImage`**: Customer-uploaded proof images.
 
 ### N. Notifications & Audit Logs (5 Models)
-- **`Notification`**: Outbox for Email, SMS, In-App, and Push with unique `dedupeKey` to prevent spamming.
-- **`NotificationPreference`**: Opt-in/opt-out toggles per user.
+- **`Notification`**: Outbox for Email, SMS, In-App, and Push with unique `dedupeKey`, `attempts`, `nextAttemptAt` (for exponential backoff), `readAt`, and `DEAD` status for dead-letter queuing.
+- **`NotificationPreference`**: Opt-in/opt-out toggles per user (`emailMarketing`, `smsMarketing`, `promotionalPush`, `smsRecovery`, with mandatory `orderUpdates = true` for transactional integrity).
 - **`AuditLog`**: **Immutable append-only system ledger** recording all privileged actions (actor, IP, user-agent, target).
 - **`Setting`**: Key-value system configurations with typed Zod schemas (`store_profile`, `invoice`, `seo_defaults`, `contact`).
 - **`AnalyticsDailySummary`**: Pre-computed daily aggregate rollups (GMV, orders, conversion).

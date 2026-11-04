@@ -191,6 +191,7 @@ enum NotificationStatus {
   SENT
   DELIVERED
   FAILED
+  DEAD
 }
 
 enum ReviewStatus {
@@ -1481,6 +1482,9 @@ model Notification {
   metadata      Json                @default("{}")
   status        NotificationStatus  @default(PENDING)
   dedupeKey     String?             @unique
+  attempts      Int                 @default(0)
+  nextAttemptAt DateTime?           @default(now())
+  readAt        DateTime?
   sentAt        DateTime?
   deliveredAt   DateTime?
   failedAt      DateTime?
@@ -1493,6 +1497,8 @@ model Notification {
   @@index([userId])
   @@index([status])
   @@index([channel])
+  @@index([status, nextAttemptAt])
+  @@index([userId, readAt])
 }
 
 model NotificationPreference {
@@ -1502,6 +1508,7 @@ model NotificationPreference {
   smsMarketing    Boolean  @default(true)
   orderUpdates    Boolean  @default(true)
   promotionalPush Boolean  @default(true)
+  smsRecovery     Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
