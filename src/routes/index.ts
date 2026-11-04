@@ -37,6 +37,10 @@ import { adminExpensesRouter } from '@/modules/expenses/expenses.routes';
 import { adminAnalyticsRouter } from '@/modules/analytics/analytics.routes';
 import { adminReportsRouter } from '@/modules/reports/reports.routes';
 import { internalJobsRouter } from '@/modules/internal/internal-jobs.routes';
+import {
+  customerNotificationsRouter,
+  adminNotificationsRouter,
+} from '@/modules/notifications/notifications.routes';
 
 const rootRouter = Router();
 
@@ -133,6 +137,10 @@ rootRouter.use('/admin/analytics', adminAnalyticsRouter);
 
 // Reports (Admin)
 rootRouter.use('/admin/reports', adminReportsRouter);
+
+// Notifications (Customer & Admin)
+rootRouter.use('/notifications', customerNotificationsRouter);
+rootRouter.use('/admin/notifications', adminNotificationsRouter);
 
 export { rootRouter };
 

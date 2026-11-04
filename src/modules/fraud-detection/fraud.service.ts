@@ -7,6 +7,8 @@ import { ordersService, type OrdersService } from '@/modules/orders/orders.servi
 import type { OrderEntity, IFraudAssessor } from '@/modules/orders/orders.types';
 import { fraudRepository, type FraudRepository } from './fraud.repository';
 import { fraudEngine, type FraudEngine } from './fraud.engine';
+import { eventBus } from '@/events/event-bus';
+import { notificationsService } from '@/modules/notifications/notifications.service';
 import type {
   FraudRuleFacts,
   FraudReviewFilter,
@@ -86,6 +88,31 @@ export class FraudService implements IFraudAssessor {
         explanation: assessmentResult.explanation,
         reviewStatus: assessmentResult.reviewStatus,
       });
+
+      // M14: Alert admin if order is held under high fraud risk
+      if (assessmentResult.riskLevel === 'HIGH') {
+        eventBus.emitDomainEvent({
+          id: `fraud_${order.id}_${Date.now()}`,
+          type: 'fraud:review',
+          orderId: order.id,
+          score: assessmentResult.riskScore,
+          riskTier: 'HIGH',
+          summary: `High fraud risk order #${order.orderNumber} flagged (score: ${assessmentResult.riskScore})`,
+          timestamp: new Date().toISOString(),
+        });
+
+        void notificationsService.safeNotify({
+          channel: 'IN_APP',
+          recipient: 'admin',
+          template: 'fraud_review_alert',
+          data: {
+            orderId: order.orderNumber,
+            score: assessmentResult.riskScore,
+            rules: assessmentResult.triggeredRules,
+          },
+          dedupeKey: `fraud_alert_${order.id}`,
+        });
+      }
 
       logger.info(
         {

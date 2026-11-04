@@ -11,6 +11,9 @@ import {
   getRequiredPermissionForTransition,
   canCustomerCancel,
 } from './orders.state-machine';
+import { eventBus } from '@/events/event-bus';
+import { notificationsService } from '@/modules/notifications/notifications.service';
+import type { NotificationTemplateName } from '@/modules/notifications/notifications.types';
 import type {
   OrderEntity,
   CreateOrderInput,
@@ -94,6 +97,44 @@ export class OrdersService {
           grandTotal: result.order.grandTotal,
           paymentMethod: result.order.paymentMethod,
         },
+      });
+
+      // M14: Realtime event broadcast and notification outbox queuing
+      eventBus.emitDomainEvent({
+        id: `order_${result.order.id}`,
+        type: 'order:new',
+        orderNumber: result.order.orderNumber,
+        totalAmount: Number(result.order.grandTotal),
+        summary: `New order #${result.order.orderNumber} placed for ৳${result.order.grandTotal}`,
+        timestamp: new Date().toISOString(),
+      });
+
+      const customerEmail = result.order.customerSnapshot?.email;
+      if (customerEmail) {
+        void notificationsService.safeNotify({
+          channel: 'EMAIL',
+          recipient: customerEmail,
+          userId: result.order.customerId,
+          template: 'order_placed',
+          data: {
+            orderNumber: result.order.orderNumber,
+            totalAmount: result.order.grandTotal,
+            itemsCount: result.order.items?.length || 1,
+          },
+          dedupeKey: `order_placed_${result.order.id}`,
+        });
+      }
+
+      void notificationsService.safeNotify({
+        channel: 'IN_APP',
+        recipient: 'admin',
+        template: 'new_order_admin_alert',
+        data: {
+          orderNumber: result.order.orderNumber,
+          totalAmount: result.order.grandTotal,
+          customerEmail: customerEmail || 'N/A',
+        },
+        dedupeKey: `admin_order_alert_${result.order.id}`,
       });
     }
 
@@ -311,6 +352,42 @@ export class OrdersService {
         note: input.note,
       },
     });
+
+    // M14: Realtime status update broadcast and customer notification
+    eventBus.emitDomainEvent({
+      id: `order_status_${order.id}_${input.status}_${Date.now()}`,
+      type: 'order:status',
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: input.status,
+      userId: order.customerId,
+      summary: `Order #${order.orderNumber} is now ${input.status}`,
+      timestamp: new Date().toISOString(),
+    });
+
+    const customerEmail = order.customerSnapshot?.email;
+    if (customerEmail) {
+      const templateMap: Record<string, string> = {
+        CONFIRMED: 'order_confirmed',
+        SHIPPED: 'order_shipped',
+        DELIVERED: 'order_delivered',
+        CANCELLED: 'order_cancelled',
+      };
+      const template = templateMap[input.status];
+      if (template) {
+        void notificationsService.safeNotify({
+          channel: 'EMAIL',
+          recipient: customerEmail,
+          userId: order.customerId,
+          template: template as NotificationTemplateName,
+          data: {
+            orderNumber: order.orderNumber,
+            reason: input.note,
+          },
+          dedupeKey: `order_status_${order.id}_${input.status}`,
+        });
+      }
+    }
 
     const hasViewCost =
       actorContext.permissions.includes('*') || actorContext.permissions.includes('order:view_cost');

@@ -4,6 +4,7 @@ import { env } from '@/config/env.config';
 import { logger } from '@/utils/logger';
 import { disconnectDatabase } from '@/config/database';
 import { disconnectRedis } from '@/config/redis';
+import { initSocketServer, closeSocketServer } from '@/sockets/socket.server';
 
 let server: Server | null = null;
 let isShuttingDown = false;
@@ -19,6 +20,7 @@ const startServer = (): void => {
       `🚀 ${env.APP_NAME} started successfully on port ${env.PORT}`,
     );
   });
+  initSocketServer(server);
 };
 
 export const gracefulShutdown = async (signal: string): Promise<void> => {
@@ -35,6 +37,9 @@ export const gracefulShutdown = async (signal: string): Promise<void> => {
   forceExitTimeout.unref();
 
   try {
+    // 0. Close Socket.IO server
+    await closeSocketServer();
+
     // 1. Close HTTP Server
     if (server) {
       await new Promise<void>((resolve, reject) => {

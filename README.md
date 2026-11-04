@@ -244,5 +244,31 @@ Because Render free tier does not support persistent background daemons, schedul
 | `release-expired-reservations` | Every 10 mins | cron-job.org | Releases expired variant stock reservations back into available inventory |
 | `cleanup-guest-carts` | Once daily (e.g. 03:00 UTC) | cron-job.org | Purges orphan guest carts older than 30 days |
 | `purge-checkout-pii` | Once daily (e.g. 04:00 UTC) | cron-job.org | Anonymizes customer PII from expired checkout sessions older than 90 days |
+| `process-notifications` | Every 2-5 mins | cron-job.org | Drains pending Postgres notification outbox queue with exponential backoff & dead-letter tracking |
+| `purge-old-notifications` | Once daily (e.g. 05:00 UTC) | cron-job.org | Purges sent/delivered/dead notifications older than 180 days |
+
+### 6. Real-Time Socket.IO & Render Free-Tier Sleep Handling
+Diano uses an in-memory single-instance Socket.IO server connected to an internal decoupled `eventBus`.
+- **Authentication Handshake:** Pass JWT access token via `auth: { token: "<access_token>" }` or standard Authorization header. Revoked/expired sessions are rejected at the handshake.
+- **Server-Controlled Rooms:**
+  - `user:<id>`: Automatically assigned to customer for their private order and in-app notifications.
+  - `admin:all`: Joined by administrative staff.
+  - `admin:perm:<slug>`: Dynamically joined based on assigned permissions (e.g., `admin:perm:order:read`, `admin:perm:fraud:manage`, `admin:perm:inventory:manage`).
+  - Client-initiated arbitrary room joins (`socket.emit('join')`) are strictly forbidden and rejected.
+- **Render Sleep & Reconnection Guide:**
+  When Render free web services sleep after 15 minutes of idle time, active WebSocket connections disconnect. Frontend clients must configure automatic reconnection with exponential backoff:
+  ```typescript
+  import { io } from 'socket.io-client';
+
+  const socket = io(process.env.NEXT_PUBLIC_API_URL, {
+    auth: { token: userAccessToken },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
+    transports: ['websocket', 'polling'],
+  });
+  ```
+  When the Render container wakes upon incoming user interaction, the client automatically reconnects, re-runs the handshake verification, and rejoins all authorized rooms seamlessly.
 
 

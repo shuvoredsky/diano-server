@@ -2262,6 +2262,55 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Streaming export file' } },
       },
     },
+    // -------------------------------------------------------------------------
+    // NOTIFICATIONS & REALTIME
+    // -------------------------------------------------------------------------
+    '/api/v1/notifications': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'List current user notifications (in-app)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Notification list' } },
+      },
+    },
+    '/api/v1/notifications/{id}/read': {
+      patch: {
+        tags: ['Notifications'],
+        summary: 'Mark an in-app notification as read',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Notification marked read' } },
+      },
+    },
+    '/api/v1/notifications/preferences': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Get current user notification preferences',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'User notification preferences' } },
+      },
+      patch: {
+        tags: ['Notifications'],
+        summary: 'Update notification preferences (transactional cannot be disabled)',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Preferences updated' } },
+      },
+    },
+    '/api/v1/admin/notifications': {
+      get: {
+        tags: ['Admin Notifications'],
+        summary: 'List outbox notifications with channel, status and date filters',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Notification list' } },
+      },
+    },
+    '/api/v1/admin/notifications/{id}/retry': {
+      post: {
+        tags: ['Admin Notifications'],
+        summary: 'Manual retry for DEAD or FAILED notification',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Notification queued for retry' } },
+      },
+    },
   },
 };
 

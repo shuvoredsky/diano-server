@@ -6,6 +6,8 @@ import { inventoryService } from '@/modules/inventory/inventory.service';
 import { paymentsRepository as defaultRepo, type PaymentsRepository } from './payments.repository';
 import { paymentGatewayRegistry as defaultRegistry, type PaymentGatewayRegistry } from './gateways/gateway.registry';
 import { assertValidPaymentTransition } from './payments.state-machine';
+import { eventBus } from '@/events/event-bus';
+import { notificationsService } from '@/modules/notifications/notifications.service';
 import type {
   InitiatePaymentDto,
   PaymentEntity,
@@ -301,6 +303,34 @@ export class PaymentsService {
       eventType: 'SSLCOMMERZ_CALLBACK_SUCCESS',
       rawPayload: payload,
     });
+
+    // M14: Realtime payment status event & customer email notification
+    eventBus.emitDomainEvent({
+      id: `payment_${payment.id}_${Date.now()}`,
+      type: 'payment:status',
+      paymentId: payment.id,
+      status: 'PAID',
+      orderId: payment.orderId,
+      summary: `Payment ${payment.id} completed successfully`,
+      timestamp: new Date().toISOString(),
+    });
+
+    const paidOrder = await prisma.order.findUnique({ where: { id: payment.orderId } });
+    const paidCustomerEmail = (paidOrder?.customerSnapshot as { email?: string } | null)?.email;
+    if (paidCustomerEmail) {
+      void notificationsService.safeNotify({
+        channel: 'EMAIL',
+        recipient: paidCustomerEmail,
+        userId: paidOrder?.customerId,
+        template: 'payment_success',
+        data: {
+          orderNumber: paidOrder?.orderNumber,
+          amount: payment.amount,
+          transactionId: payment.transactionId,
+        },
+        dedupeKey: `payment_paid_${payment.id}`,
+      });
+    }
 
     return {
       redirectUrl: `${frontendBaseUrl}/payment/result?orderId=${payment.orderId}&status=success&tranId=${transactionId}`,
@@ -627,6 +657,23 @@ export class PaymentsService {
 
       return createdRefund;
     });
+
+    // M14: Realtime refund notification
+    const orderRecord = await prisma.order.findUnique({ where: { id: payment.orderId } });
+    const refundCustomerEmail = (orderRecord?.customerSnapshot as { email?: string } | null)?.email;
+    if (refundCustomerEmail) {
+      void notificationsService.safeNotify({
+        channel: 'EMAIL',
+        recipient: refundCustomerEmail,
+        userId: orderRecord?.customerId,
+        template: 'refund_completed',
+        data: {
+          orderNumber: orderRecord?.orderNumber,
+          amount: dto.amount,
+        },
+        dedupeKey: `refund_${refund.id}`,
+      });
+    }
 
     return refund as unknown as RefundEntity;
   }

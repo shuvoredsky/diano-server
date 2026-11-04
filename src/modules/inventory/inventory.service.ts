@@ -22,6 +22,9 @@ import { inventoryRepository as defaultRepo } from './inventory.repository';
 import type { IAuditService } from '@/services/audit.service';
 import { auditService as defaultAuditService } from '@/services/audit.service';
 
+import { notificationsService } from '@/modules/notifications/notifications.service';
+import { eventBus } from '@/events/event-bus';
+
 export interface IInventoryAlertEmitter {
   emitLowStock(variantId: string, available: number, threshold: number): void;
   emitOutOfStock(variantId: string): void;
@@ -29,19 +32,43 @@ export interface IInventoryAlertEmitter {
 
 export class DefaultInventoryAlertEmitter implements IInventoryAlertEmitter {
   emitLowStock(variantId: string, available: number, threshold: number): void {
-    // Interface placeholder: queued for notification dispatch in M14
-    if (process.env.NODE_ENV !== 'test') {
-      console.info(
-        `[InventoryAlert] LOW_STOCK alert for variant ${variantId}: available=${available}, threshold=${threshold}`,
-      );
-    }
+    eventBus.emitDomainEvent({
+      id: `stock_low_${variantId}_${Date.now()}`,
+      type: 'stock:low',
+      variantId,
+      available,
+      threshold,
+      summary: `Variant ${variantId} is low on stock (${available}/${threshold})`,
+      timestamp: new Date().toISOString(),
+    });
+
+    void notificationsService.safeNotify({
+      channel: 'IN_APP',
+      recipient: 'admin',
+      template: 'low_stock_alert',
+      data: { variantId, available, threshold },
+      dedupeKey: `low_stock_${variantId}_${Math.floor(Date.now() / 3600000)}`,
+    });
   }
 
   emitOutOfStock(variantId: string): void {
-    // Interface placeholder: queued for notification dispatch in M14
-    if (process.env.NODE_ENV !== 'test') {
-      console.warn(`[InventoryAlert] OUT_OF_STOCK alert for variant ${variantId}`);
-    }
+    eventBus.emitDomainEvent({
+      id: `stock_out_${variantId}_${Date.now()}`,
+      type: 'stock:low',
+      variantId,
+      available: 0,
+      threshold: 0,
+      summary: `Variant ${variantId} is completely out of stock`,
+      timestamp: new Date().toISOString(),
+    });
+
+    void notificationsService.safeNotify({
+      channel: 'IN_APP',
+      recipient: 'admin',
+      template: 'out_of_stock_alert',
+      data: { variantId },
+      dedupeKey: `out_of_stock_${variantId}_${Math.floor(Date.now() / 3600000)}`,
+    });
   }
 }
 
