@@ -5,7 +5,6 @@ import { app } from '@/app';
 import { initSocketServer, closeSocketServer } from '@/sockets/socket.server';
 import { eventBus } from '@/events/event-bus';
 import { generateAccessToken } from '@/utils/jwt.util';
-import { authRepository } from '@/modules/auth/auth.repository';
 import { createTestSuperAdminAuth, createTestCustomerAuth } from './test-auth-helper';
 
 describe('Socket.IO Real-Time Integration Tests', () => {
@@ -137,8 +136,8 @@ describe('Socket.IO Real-Time Integration Tests', () => {
       customerSocket.on('connect_error', reject);
     });
 
-    let receivedOrderStatus: any = null;
-    let receivedOrderNew: any = null;
+    let receivedOrderStatus: Record<string, unknown> | null = null;
+    let receivedOrderNew: Record<string, unknown> | null = null;
 
     customerSocket.on('order:status', data => {
       receivedOrderStatus = data;
@@ -195,7 +194,7 @@ describe('Socket.IO Real-Time Integration Tests', () => {
       adminSocket.on('connect_error', reject);
     });
 
-    let adminReceivedNew: any = null;
+    let adminReceivedNew: Record<string, unknown> | null = null;
 
     adminSocket.on('order:new', data => {
       adminReceivedNew = data;
@@ -234,7 +233,7 @@ describe('Socket.IO Real-Time Integration Tests', () => {
       customerSocket.on('connect_error', reject);
     });
 
-    let socketError: any = null;
+    let socketError: Record<string, unknown> | null = null;
     customerSocket.on('error', err => {
       socketError = err;
     });

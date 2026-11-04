@@ -7,7 +7,7 @@ import {
   verifyUnsubscribeToken,
   getTemplateCategory,
 } from '@/modules/notifications/notifications.utils';
-import { renderTemplate } from '@/modules/notifications/templates';
+import { renderTemplate, type NotificationTemplateName } from '@/modules/notifications/templates';
 import {
   SmtpEmailAdapter,
   ResendEmailAdapter,
@@ -321,7 +321,7 @@ describe('Notifications Unit Tests', () => {
         channel: 'EMAIL',
         recipient: 'customer@example.com',
         userId: 'user-1',
-        template: 'promotional_blast' as any,
+        template: 'promotional_blast' as unknown as NotificationTemplateName,
         data: { message: 'Discount sale' },
       });
 

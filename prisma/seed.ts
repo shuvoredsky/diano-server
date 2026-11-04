@@ -130,8 +130,8 @@ export const permissionsData = [
 export const rolesData = SYSTEM_ROLES;
 
 export async function seedDatabase() {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('❌ Refusing to run seed in production environment for security.');
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+    throw new Error('❌ Refusing to run seed in production environment for security. To override, explicitly set ALLOW_PRODUCTION_SEED=true');
   }
 
   // eslint-disable-next-line no-console

@@ -13,7 +13,7 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
   let customerUserId: string;
 
   let testWarehouseId: string;
-  let testProductId: string;
+  let _testProductId: string;
   let testVariantId: string;
 
   const cleanupZoneIds: string[] = [];
@@ -70,7 +70,7 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
         status: 'PUBLISHED',
       },
     });
-    testProductId = product.id;
+    _testProductId = product.id;
 
     const variant = await prisma.productVariant.create({
       data: {

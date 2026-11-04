@@ -265,7 +265,7 @@ describe('Notifications Integration Tests (Postgres Outbox Queue & API)', () => 
 
       expect(listRes.status).toBe(200);
       expect(listRes.body.success).toBe(true);
-      expect(listRes.body.data.some((n: any) => n.id === inAppNotif.id)).toBe(true);
+      expect(listRes.body.data.some((n: { id: string }) => n.id === inAppNotif.id)).toBe(true);
 
       const readRes = await request(app)
         .patch(`/api/v1/notifications/${inAppNotif.id}/read`)

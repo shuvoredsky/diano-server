@@ -2317,9 +2317,9 @@ export const swaggerDocument = {
 export const setupSwagger = (app: Express): void => {
   if (env.NODE_ENV !== 'production') {
     app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-    app.get('/api/docs.json', (_req, res) => {
+    app.get(['/api/docs.json', '/api/docs/openapi.json', '/api/v1/openapi.json'], (_req, res) => {
       res.setHeader('Content-Type', 'application/json');
-      res.send(swaggerDocument);
+      res.json(swaggerDocument);
     });
     logger.info('Swagger documentation mounted at /api/docs');
   }

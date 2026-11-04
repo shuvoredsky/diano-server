@@ -1,13 +1,26 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { productsController } from './products.controller';
 import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
 import { handleUploadMultiple, handleUploadSingle } from '@/middlewares/upload.middleware';
 
 export const productsRouter = Router();
 
+const searchRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    statusCode: 429,
+    message: 'Too many search requests, please try again in a minute.',
+  },
+});
+
 // ================= Public Endpoints =================
 // Note: /featured and /admin/* must be declared before /:slug to avoid route collision
-productsRouter.get('/', productsController.getPublicProducts);
+productsRouter.get('/', searchRateLimiter, productsController.getPublicProducts);
 productsRouter.get('/featured', productsController.getPublicFeatured);
 
 // ================= Admin Endpoints =================

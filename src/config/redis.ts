@@ -1,52 +1,23 @@
-import Redis from 'ioredis';
-import { env } from '@/config/env.config';
 import { logger } from '@/utils/logger';
 
-// Create Redis client with lazy connection to avoid crashing when Redis is not running
-export const redisClient = new Redis(env.REDIS_URL, {
-  lazyConnect: true,
-  enableOfflineQueue: false,
-  maxRetriesPerRequest: 1,
-  connectTimeout: 2000,
-  retryStrategy: () => null, // Do not auto-retry continuously when Redis is offline
-});
-
-// Suppress unhandled error events to avoid process crash
-redisClient.on('error', err => {
-  if (env.NODE_ENV !== 'test') {
-    logger.warn({ error: err.message }, 'Redis connection warning');
-  }
-});
+/**
+ * Redis client stub.
+ * Per project decision (docs/AGENT_RULES.md): Redis is disabled on Render free tier.
+ * Notification uses Postgres outbox queue, Socket.IO is single-instance in-memory.
+ */
+export const redisClient = null;
 
 /**
- * Checks Redis health safely without crashing
+ * Checks Redis health safely without crashing.
+ * Returns healthy/disabled status when Redis is deferred.
  */
 export const checkRedisHealth = async (): Promise<{ isConnected: boolean; message: string }> => {
-  try {
-    if (redisClient.status !== 'ready') {
-      await redisClient.connect();
-    }
-    const ping = await redisClient.ping();
-    if (ping === 'PONG') {
-      return { isConnected: true, message: 'Redis connection is healthy' };
-    }
-    return { isConnected: false, message: `Unexpected Redis ping response: ${ping}` };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown Redis error';
-    return { isConnected: false, message: `Redis disconnected: ${errorMsg}` };
-  }
+  return { isConnected: true, message: 'Redis is disabled (Postgres outbox queue active)' };
 };
 
 /**
- * Cleanly disconnects Redis on shutdown
+ * Cleanly disconnects Redis on shutdown (no-op when Redis is disabled).
  */
 export const disconnectRedis = async (): Promise<void> => {
-  try {
-    if (redisClient.status === 'ready' || redisClient.status === 'connecting') {
-      await redisClient.quit();
-      logger.info('Redis disconnected cleanly');
-    }
-  } catch (error) {
-    logger.error({ error }, 'Error disconnecting Redis');
-  }
+  logger.info('Redis shutdown handler invoked (no active Redis connection)');
 };

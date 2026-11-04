@@ -148,6 +148,18 @@ export const validateEnv = (customEnv: Record<string, unknown> = process.env): E
     );
   }
 
+  // Production check: verify strong secrets and no seed credentials
+  if (result.data.NODE_ENV === 'production') {
+    if (result.data.JWT_ACCESS_SECRET.length < 32 || result.data.JWT_REFRESH_SECRET.length < 32) {
+      throw new Error('[Security Error] JWT secrets must be at least 32 characters long in production.');
+    }
+    if (process.env.SEED_ADMIN_PASSWORD) {
+      console.warn(
+        '[Security Warning] SEED_ADMIN_PASSWORD is set in production. Seed credentials must not be stored in production environments.',
+      );
+    }
+  }
+
   return result.data;
 };
 

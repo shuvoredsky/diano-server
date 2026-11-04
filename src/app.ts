@@ -10,6 +10,11 @@ import { requestIdMiddleware } from '@/middlewares/request-id.middleware';
 import { baseRateLimiter } from '@/middlewares/rate-limiter.middleware';
 import { notFoundMiddleware } from '@/middlewares/not-found.middleware';
 import { errorMiddleware } from '@/middlewares/error.middleware';
+import {
+  prototypePollutionGuard,
+  parameterPollutionGuard,
+  requestTimeoutAndSlowLogger,
+} from '@/middlewares/security-guard.middleware';
 import { rootRouter } from '@/routes';
 import { setupSwagger } from '@/docs/swagger';
 
@@ -18,11 +23,41 @@ const app = express();
 // Trust Render reverse proxy (1 hop) so req.ip and rate limiters receive real client IP
 app.set('trust proxy', 1);
 
+// Slow request warning and socket timeout
+app.use(requestTimeoutAndSlowLogger);
+
 // Request logging with Pino
 app.use(httpLogger);
 
-// Security Headers
-app.use(helmet());
+// Enhanced Security Headers (Helmet)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+        imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com', 'https:'],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", 'https:'],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    hsts:
+      env.NODE_ENV === 'production'
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+          }
+        : false,
+    hidePoweredBy: true,
+    xFrameOptions: { action: 'deny' },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  }),
+);
 
 // CORS Configuration
 app.use(
@@ -54,9 +89,13 @@ app.use(
 // Response compression
 app.use(compression());
 
-// Body Parsers
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body Parsers: 1mb limit for JSON and urlencoded to prevent payload flood attacks
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Prototype Pollution and Parameter Pollution Guards
+app.use(prototypePollutionGuard);
+app.use(parameterPollutionGuard);
 
 // Cookie Parser
 app.use(cookieParser(env.COOKIE_SECRET));
@@ -81,8 +120,10 @@ app.get('/health', (_req, res) => {
 // API Version 1 Routes
 app.use(env.API_PREFIX, rootRouter);
 
-// Static file serving for local uploads (development)
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+// Static file serving for local uploads (development only)
+if (env.NODE_ENV !== 'production') {
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+}
 
 // Swagger API Documentation (non-production only)
 setupSwagger(app);
