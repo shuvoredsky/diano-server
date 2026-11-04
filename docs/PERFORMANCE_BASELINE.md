@@ -114,3 +114,4 @@ Limit  (cost=8.17..8.18 rows=1 width=80)
 - **Idle Timeout:** `10,000 ms`
 - **Connection Timeout:** `15,000 ms`
 - **Transaction Timeout (`ORDER_TX_TIMEOUT_MS`):** `15,000 ms` (safe against remote Neon round-trips)
+

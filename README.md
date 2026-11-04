@@ -1,16 +1,17 @@
 # DIANO Server (Backend API)
 
-DIANO is an enterprise-grade e-commerce backend platform built as a clean Modular Monolith using TypeScript, Express, Prisma ORM, Redis, and BullMQ.
+DIANO is an enterprise-grade e-commerce backend platform built as a clean Modular Monolith using TypeScript, Express 5, Prisma ORM 7, Neon PostgreSQL, and Cloudinary.
 
 ---
 
 ## 🛠️ Technology Stack
-- **Runtime:** Node.js (v20+ / v24 LTS)
+- **Runtime:** Node.js (`v20+` / `v24 LTS`)
 - **Language:** TypeScript 5+ (Strict Mode)
 - **Framework:** Express.js 5
-- **ORM:** Prisma Client & Schema
-- **Cache & Queues:** Redis (ioredis), BullMQ
-- **Logging:** Pino with Pino-HTTP (Sensitive data redaction enabled)
+- **ORM & Database:** Prisma 7 with Neon Serverless PostgreSQL (Singapore Region)
+- **Architecture:** Zero-Redis / Zero-Docker target (Postgres Outbox Queue, Socket.IO in-memory event bus)
+- **Media CDN:** Cloudinary (Local disk adapter disabled in production)
+- **Logging:** Pino with Pino-HTTP (Sensitive PII data redaction enabled)
 - **Validation:** Zod
 - **Testing:** Vitest & Supertest
 - **Linting & Formatting:** ESLint (Flat Config) & Prettier
@@ -75,9 +76,12 @@ Ensure strong secrets are defined for `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
 | `npm start` | Runs compiled production server from `dist/server.js` |
 | `npm run typecheck` | Validates TypeScript types across the codebase |
 | `npm run lint` | Runs ESLint flat config |
-| `npm test` | Runs all Vitest test suites |
+| `npm test` | Runs all Vitest test suites sequentially against test database |
 | `npm run test:watch` | Runs Vitest in interactive watch mode |
 | `npm run prisma:generate`| Generates Prisma client types |
+| `npm run openapi:export` | Exports complete OpenAPI 3.0 specification to `openapi.json` |
+| `npm run audit:routes` | Scans Express route tree and validates zero unprotected admin routes |
+| `npm run db:backup` | Dumps database tables to `backups/` using pure TypeScript client |
 | `npm run storage:check` | Diagnostics: Tests Cloudinary credentials, uploads a probe image, and verifies cleanup |
 
 ---

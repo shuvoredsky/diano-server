@@ -29,8 +29,10 @@
 | **M10b: Mobile Financial Services (bKash & Nagad)** | bKash and Nagad direct merchant API integrations | ⏳ Pending | Awaiting credentials |
 | **M11: Fraud Detection & Risk Scoring** | Explainable rule-based heuristics, RiskScorer engine (score 0-100, LOW/MEDIUM/HIGH), non-blocking fail-open hook, review queue, OTP customer verification, append-only decision ledger | ✅ Completed | DB verified (16/16 unit + 3/3 real Neon DB integration tests passing) |
 | **M12: Shipping, Coupons, Returns & Refunds** | DB-driven ShippingZone & methods, CourierAdapter interface, race-safe coupons & flash sales, customer return requests with return window, inspection & return restock, refund idempotency & proportional coupon refunds | ✅ Completed | DB verified (12/12 unit + 6/6 real Neon DB integration tests passing) |
-| **M13: Advanced Analytics & SEO Optimization** | Sales reporting, Google Search Console structured data | ⏳ Queued | Scheduled |
-| **M14: Background Jobs, Queues & Automation** | BullMQ workers, automated order expiry, reconciliation crons | ⏳ Queued | Scheduled |
+| **M13: Advanced Analytics, Reports & Operating Expenses** | Financial KPIs, Asia/Dhaka periods, gap-filled time-series trends, gross profit & margin calculation with role-based masking (`analytics:view_finance`), sales/inventory/tax reports with streaming CSV/Excel export, operating expenses CRUD with category breakdown | ✅ Completed | DB verified (17/17 unit + 10/10 real Neon DB integration tests passing) |
+| **M14: Postgres Outbox Notifications & Real-Time Event Bus** | Reliable PostgreSQL outbox queue (`SKIP LOCKED`), exponential backoff to `DEAD`, email adapters (SMTP/Resend/Brevo/Console), SMS adapter, in-app notifications with unread badge, user preferences & quiet hours (Dhaka 9PM-9AM), Socket.IO with JWT handshake and room isolation | ✅ Completed | DB verified (24/24 unit + 12/12 real Neon DB integration tests passing) |
+| **M15: Security Hardening & Final API Documentation** | Helmet API-only CSP, HSTS in prod, prototype pollution guard, parameter pollution guard, request timeout & slow request logger, 272-route automated permission matrix audit (0 unprotected admin routes), sensitive data exposure scanner, load smoke benchmark (p95 < 4ms for health), complete OpenAPI export (`openapi.json`) | ✅ Completed | 38/38 security tests passing |
+| **M16: Production Deployment Readiness** | Render Web Service + Neon PostgreSQL (Singapore) + Cloudinary architecture, runtime pooled vs direct migration URLs, production seed guard, pure TypeScript database backup & restore (`npm run db:backup`), cron-job.org scheduler table (8 jobs), go-live checklist, production documentation | ✅ Completed | 100% Production Ready |
 
 ---
 
@@ -389,5 +391,72 @@ The following items are implemented according to Prisma models and interfaces, b
 - **Test Suite Results:**
   - **12/12 Unit Tests Passed** covering proportional discount calculation, rounding accuracy, ceiling caps, free shipping, percentage caps, expiry, and exclusions.
   - **6/6 Integration Tests Passed** on live Neon PostgreSQL covering shipping zone/method calculation, shipment booking & delivery state transitions, coupon checkout application & atomic usage, return request creation, warehouse inspection & `RETURN_RESTOCK` stock movement, and proportional refund execution.
+
+---
+
+## Milestone M13: Analytics, Reports & Operating Expenses (Completed)
+- **Status:** Completed (DB Mode Verified on Neon PostgreSQL)
+- **Key Modules & Implementations:**
+  1. **Analytics Engine (`src/modules/analytics`):**
+     - Financial calculations strictly relative to Asia/Dhaka (+06:00) business days. Periods: `today`, `yesterday`, `last_7_days`, `last_30_days`, `this_week` (Saturday start), `last_week`, `this_month`, `last_month`, `custom`.
+     - Gap-filled time-series sales trends using PostgreSQL `generate_series`.
+     - Gross Profit and Profit Margin calculations: `Revenue - Product Cost Price - Discounts - Tax - Refunds`.
+     - Sensitive financial metric stripping for non-financial viewers lacking `analytics:view_finance`.
+  2. **Multi-Format Reporting Engine (`src/modules/reports`):**
+     - Sales Reports, Product Performance Reports, Inventory Valuation, and Tax Summaries.
+     - Streaming CSV (`csv-stringify`) and stylized Excel (`exceljs`) workbook exports.
+  3. **Operating Expenses Module (`src/modules/expenses`):**
+     - CRUD management with categories (`RENT`, `SALARIES`, `MARKETING`, `PACKAGING`, `UTILITIES`, `COURIER_FEES`, `SOFTWARE`, `OTHER`).
+     - Expense breakdown aggregation feeding directly into net profit calculations.
+
+---
+
+## Milestone M14: Postgres Outbox Notifications & Real-Time Event Bus (Completed)
+- **Status:** Completed (DB Mode Verified on Neon PostgreSQL)
+- **Key Modules & Implementations:**
+  1. **PostgreSQL Outbox Queue (`src/modules/notifications`):**
+     - Decoupled from external broker (zero Redis / BullMQ dependency).
+     - Concurrent worker polling using `SELECT ... FOR UPDATE SKIP LOCKED`.
+     - Exponential backoff retry with transition to `DEAD` status after 5 failed attempts.
+     - Deduping key enforcement (`dedupeKey` unique constraint).
+  2. **Channel Adapters & Templates:**
+     - Modular adapters for Email (`SMTP`, `Resend`, `Brevo`, `Console`), SMS (`ConsoleAdapter`), and In-App notifications.
+     - Typed multilingual templates (`en` and `bn`) for orders, payments, refunds, and returns.
+     - Customer preference enforcement and Dhaka quiet hours (9:00 PM - 9:00 AM) protection for marketing SMS.
+  3. **Real-Time Socket.IO Bus (`src/sockets`):**
+     - JWT handshake authentication and automatic session revocation checks.
+     - Server-assigned room isolation (`user:<id>`, `admin:all`, `admin:perm:<slug>`). Arbitrary client room joins strictly blocked.
+     - Minimal broadcast payloads preventing data leakage over websockets.
+
+---
+
+## Milestone M15: Security Hardening & Final API Docs (Completed)
+- **Status:** Completed (Verified with Automated Security Matrix)
+- **Key Implementations:**
+  1. **Security Guardrails (`src/middlewares/security-guard.middleware.ts`):**
+     - Helmet API-only CSP, HSTS in production, and `X-Powered-By` suppression.
+     - Recursive Prototype Pollution guard rejecting `__proto__`, `constructor`, `prototype`.
+     - Payload nesting depth limit (max 10 levels) and 1MB request body limit.
+     - Parameter pollution guard deduplicating query arguments.
+     - Socket request timeout (30s) and slow request warning logger (>1000ms).
+  2. **Automated Route Permission Matrix (`scripts/generate-route-matrix.ts`):**
+     - Traverses all 272 Express routes.
+     - Verified zero unprotected administrative endpoints.
+     - Automated test `security-route-matrix.integration.test.ts` (38 tests) verifying unauthenticated request rejection.
+  3. **Sensitive Data Exposure Prevention:**
+     - Response scanner verifies `passwordHash`, `tokenHash`, `costPrice`, and `clientSecret` are never exposed in public endpoints.
+  4. **OpenAPI Specification (`openapi.json`):**
+     - Exported complete OpenAPI 3.0.3 specification covering 148 public and administrative endpoints. Available via `npm run openapi:export` and `/api/docs/openapi.json`.
+
+---
+
+## Milestone M16: Production Deployment Readiness (Completed)
+- **Status:** Completed (Render + Neon + Cloudinary Architecture)
+- **Key Deliverables:**
+  1. **Production Deployment Documentation (`docs/DEPLOYMENT.md`):** Comprehensive guide for deploying on Render Web Service and Neon PostgreSQL co-located in Singapore.
+  2. **Go-Live Operational Checklist (`docs/GO_LIVE_CHECKLIST.md`):** Complete verification checklist covering DNS, SSL, SSLCOMMERZ live keys, Cloudinary, and cron schedulers.
+  3. **Database Backup & Recovery Tool (`scripts/db-backup.ts`):** Pure TypeScript backup and restore tool (`npm run db:backup`) operating without external binary dependencies. Zero credential leakage.
+  4. **Scheduled Job Automation:** Documented cron-job.org configuration for all 8 internal jobs to maintain system integrity and prevent Render sleep.
+
 
 

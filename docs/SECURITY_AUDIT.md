@@ -39,3 +39,4 @@ This document provides a systematic security audit covering all critical vulnera
 - **Production Seed Block:** Seeding is blocked if `NODE_ENV === 'production'` unless explicitly overridden with `ALLOW_PRODUCTION_SEED=true`.
 - **Seed Password Guard:** If `SEED_ADMIN_PASSWORD` is present in a production environment, a warning is emitted at boot.
 - **Render Single-Instance Rate Limiter Note:** The current rate limiter uses an in-memory sliding window store suitable for Render single-instance deployments. For multi-instance scaling, swap to Redis or Upstash rate-limit store.
+

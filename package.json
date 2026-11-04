@@ -23,7 +23,8 @@
     "payment:sandbox-check": "tsx scripts/sandbox-payment-check.ts",
     "notify:check": "tsx scripts/notify-check.ts",
     "openapi:export": "tsx scripts/export-openapi.ts",
-    "audit:routes": "tsx scripts/generate-route-matrix.ts"
+    "audit:routes": "tsx scripts/generate-route-matrix.ts",
+    "db:backup": "tsx scripts/db-backup.ts"
   },
   "keywords": [],
   "author": "",

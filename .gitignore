@@ -20,6 +20,7 @@ coverage/
 # Uploads & Media storage
 uploads/
 temp/
+backups/
 
 # Logs
 logs/

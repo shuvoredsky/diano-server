@@ -139,3 +139,4 @@ To prevent duplicate financial transactions during network retries:
   - `POST /api/v1/products/:id/images` (Product gallery)
   - `POST /api/v1/banners` (Hero/secondary banners)
   - `POST /api/v1/customers/me/avatar` (User avatar)
+
