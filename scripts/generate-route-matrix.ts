@@ -53,7 +53,11 @@ export function extractAllAppRoutes(): { method: string; path: string }[] {
     }
   }
 
-  const router = (app as unknown as { _router?: { stack?: ExpressLayer[] } })._router;
+  const appWithRouter = app as unknown as {
+    _router?: { stack?: ExpressLayer[] };
+    router?: { stack?: ExpressLayer[] };
+  };
+  const router = appWithRouter._router || appWithRouter.router;
   if (router && router.stack) {
     for (const layer of router.stack) {
       processLayer(layer, '');

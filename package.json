@@ -24,6 +24,7 @@
     "notify:check": "tsx scripts/notify-check.ts",
     "openapi:export": "tsx scripts/export-openapi.ts",
     "audit:routes": "tsx scripts/generate-route-matrix.ts",
+    "openapi:coverage": "tsx scripts/openapi-coverage.ts",
     "db:backup": "tsx scripts/db-backup.ts"
   },
   "keywords": [],

@@ -2,6 +2,7 @@ import type { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { env } from '@/config/env.config';
 import { logger } from '@/utils/logger';
+import { extendedSwaggerPaths } from './swagger-paths-extended';
 
 export const swaggerDocument = {
   openapi: '3.0.3',
@@ -2311,8 +2312,21 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Notification queued for retry' } },
       },
     },
-  },
+  } as Record<string, Record<string, unknown>>,
 };
+
+// Deeply merge extended OpenAPI paths to preserve multi-method paths (e.g., GET and PATCH on same route)
+for (const [pathKey, val] of Object.entries(extendedSwaggerPaths)) {
+  const existing = swaggerDocument.paths[pathKey];
+  if (existing) {
+    swaggerDocument.paths[pathKey] = {
+      ...existing,
+      ...val,
+    };
+  } else {
+    swaggerDocument.paths[pathKey] = val;
+  }
+}
 
 export const setupSwagger = (app: Express): void => {
   if (env.NODE_ENV !== 'production') {
