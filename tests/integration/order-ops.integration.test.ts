@@ -164,6 +164,7 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
     const shipping = '60.00';
     const grandTotal = (Number(subtotal) + Number(shipping)).toFixed(2);
 
+    const uniquePhone = `017${Math.floor(10000000 + Math.random() * 90000000)}`;
     const cartSnapshot = {
       items: [
         {
@@ -175,7 +176,7 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
       ],
       shippingAddress: {
         fullName: 'Test Customer',
-        phone: '01711223344',
+        phone: uniquePhone,
         address: 'House 12, Road 4',
         district,
       },
@@ -184,7 +185,7 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
       },
       customerInfo: {
         name: 'Test Customer',
-        phone: '01711223344',
+        phone: uniquePhone,
       },
       shippingCharge: shipping,
       discount: '0.00',
