@@ -1,144 +1,138 @@
 import fs from 'fs';
 import path from 'path';
-import { Pool } from 'pg';
+import { execFileSync } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 /**
- * Pure TypeScript database backup and restore utility.
- * Operates without requiring native pg_dump/pg_restore binary installations.
- * Never prints connection strings, passwords, or credentials.
+ * Locate pg_dump binary on current system.
  */
+export function findPgDumpPath(): string | null {
+  if (process.env.PG_DUMP_PATH && fs.existsSync(process.env.PG_DUMP_PATH)) {
+    return process.env.PG_DUMP_PATH;
+  }
 
-interface TableBackupData {
-  tableName: string;
-  rowCount: number;
-  rows: Record<string, unknown>[];
+  const standardWindowsPaths = [
+    'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
+  ];
+
+  for (const winPath of standardWindowsPaths) {
+    if (fs.existsSync(winPath)) {
+      return winPath;
+    }
+  }
+
+  // Check if pg_dump is available in system PATH
+  try {
+    const isWindows = process.platform === 'win32';
+    const checkCmd = isWindows ? 'where' : 'which';
+    const result = execFileSync(checkCmd, ['pg_dump'], { stdio: 'pipe', encoding: 'utf-8' });
+    const firstLine = result.trim().split(/\r?\n/)[0];
+    if (firstLine && fs.existsSync(firstLine)) {
+      return firstLine;
+    }
+  } catch {
+    // Not found in PATH
+  }
+
+  return null;
 }
 
-interface FullDatabaseBackup {
-  metadata: {
-    createdAt: string;
-    version: string;
-    tablesCount: number;
-    totalRows: number;
-  };
-  tables: Record<string, TableBackupData>;
+export interface BackupOptions {
+  customUrl?: string;
+  outputDir?: string;
 }
 
-export async function createDatabaseBackup(customUrl?: string): Promise<string> {
-  const dbUrl = customUrl || process.env.DIRECT_URL || process.env.DATABASE_URL;
+export interface BackupResult {
+  filePath: string;
+  fileSizeBytes: number;
+  durationMs: number;
+}
+
+/**
+ * Creates a real PostgreSQL custom-format (-Fc) dump using native pg_dump.
+ * Never prints connection strings or credentials.
+ */
+export async function createRealDatabaseBackup(options: BackupOptions = {}): Promise<BackupResult> {
+  const pgDumpBinary = findPgDumpPath();
+  if (!pgDumpBinary) {
+    throw new Error(
+      'pg_dump binary not found on this system.\n' +
+      'Please install PostgreSQL (https://www.postgresql.org/download/) or set PG_DUMP_PATH in your environment.'
+    );
+  }
+
+  const dbUrl = options.customUrl || process.env.DIRECT_URL || process.env.DATABASE_URL;
   if (!dbUrl) {
     throw new Error('Database URL not configured. Ensure DIRECT_URL or DATABASE_URL is set in environment.');
   }
 
-  const pool = new Pool({
-    connectionString: dbUrl,
-    connectionTimeoutMillis: 15000,
-  });
+  const backupsDir = options.outputDir || path.resolve(process.cwd(), 'backups');
+  if (!fs.existsSync(backupsDir)) {
+    fs.mkdirSync(backupsDir, { recursive: true });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `diano-db-backup-${timestamp}.dump`;
+  const outputPath = path.join(backupsDir, filename);
+
+  const startTime = Date.now();
 
   try {
-    const client = await pool.connect();
-    try {
-      // 1. Fetch all public base tables (excluding migration history to keep backup clean)
-      const tablesResult = await client.query<{ table_name: string }>(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-          AND table_type = 'BASE TABLE'
-          AND table_name != '_prisma_migrations'
-        ORDER BY table_name ASC;
-      `);
-
-      const tables = tablesResult.rows.map(r => r.table_name);
-      const backupData: Record<string, TableBackupData> = {};
-      let totalRows = 0;
-
-      for (const table of tables) {
-        // Query rows for table safely using quoted identifiers
-        const rowsResult = await client.query(`SELECT * FROM "${table}";`);
-        backupData[table] = {
-          tableName: table,
-          rowCount: rowsResult.rows.length,
-          rows: rowsResult.rows,
-        };
-        totalRows += rowsResult.rows.length;
+    // Run pg_dump with custom archive format (-Fc)
+    // Redact credentials by passing args directly to execFileSync without shell interpolation
+    execFileSync(
+      pgDumpBinary,
+      [
+        '--format=c',
+        '--no-owner',
+        '--no-privileges',
+        `--dbname=${dbUrl}`,
+        `--file=${outputPath}`,
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        maxBuffer: 50 * 1024 * 1024,
       }
-
-      const backup: FullDatabaseBackup = {
-        metadata: {
-          createdAt: new Date().toISOString(),
-          version: '1.0.0',
-          tablesCount: tables.length,
-          totalRows,
-        },
-        tables: backupData,
-      };
-
-      const backupsDir = path.resolve(process.cwd(), 'backups');
-      if (!fs.existsSync(backupsDir)) {
-        fs.mkdirSync(backupsDir, { recursive: true });
-      }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filePath = path.join(backupsDir, `diano-db-backup-${timestamp}.json`);
-      fs.writeFileSync(filePath, JSON.stringify(backup, null, 2), 'utf-8');
-
-      return filePath;
-    } finally {
-      client.release();
-    }
-  } finally {
-    await pool.end();
+    );
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    // Sanitize any potential URL/credential leaks in error messages
+    const sanitizedMsg = errorMsg.replace(/postgres(ql)?:\/\/[^@\s]+@[^\s/]+/gi, 'postgres://***:***@***');
+    throw new Error(`pg_dump execution failed: ${sanitizedMsg}`, { cause: err });
   }
+
+  const durationMs = Date.now() - startTime;
+  const stats = fs.statSync(outputPath);
+
+  return {
+    filePath: outputPath,
+    fileSizeBytes: stats.size,
+    durationMs,
+  };
 }
 
-export async function restoreDatabaseBackup(backupFilePath: string, targetUrl: string): Promise<{ tablesRestored: number; rowsRestored: number }> {
-  if (!fs.existsSync(backupFilePath)) {
-    throw new Error(`Backup file not found at: ${backupFilePath}`);
-  }
-
-  const backupContent = fs.readFileSync(backupFilePath, 'utf-8');
-  const backup: FullDatabaseBackup = JSON.parse(backupContent);
-
-  const pool = new Pool({
-    connectionString: targetUrl,
-    connectionTimeoutMillis: 15000,
-  });
-
-  try {
-    const client = await pool.connect();
-    try {
-      let tablesRestored = 0;
-      let rowsRestored = 0;
-
-      for (const [_tableName, tableData] of Object.entries(backup.tables)) {
-        if (tableData.rows.length > 0) {
-          tablesRestored++;
-          rowsRestored += tableData.rows.length;
-        }
-      }
-
-      return { tablesRestored, rowsRestored };
-    } finally {
-      client.release();
-    }
-  } finally {
-    await pool.end();
-  }
-}
-
-// CLI Runner
 if (require.main === module) {
-  createDatabaseBackup()
-    .then(savedPath => {
-      console.info(`✅ Database backup created successfully at: ${savedPath}`);
+  createRealDatabaseBackup()
+    .then(result => {
+      const sizeMb = (result.fileSizeBytes / (1024 * 1024)).toFixed(2);
+      console.info('================ DATABASE BACKUP COMPLETED ================');
+      console.info(`✅ Backup format: PostgreSQL Custom Archive (-Fc)`);
+      console.info(`✅ Destination  : ${result.filePath}`);
+      console.info(`✅ File Size    : ${result.fileSizeBytes} bytes (${sizeMb} MB)`);
+      console.info(`✅ Duration     : ${result.durationMs}ms`);
+      console.info('🔒 Credentials redacted: Zero database URLs or passwords leaked.');
+      console.info('===========================================================');
       process.exit(0);
     })
     .catch(err => {
-      console.error('❌ Backup execution failed:', err.message);
+      console.error('❌ Database backup failed:');
+      console.error(err instanceof Error ? err.message : err);
       process.exit(1);
     });
 }
-

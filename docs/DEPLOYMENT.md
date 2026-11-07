@@ -43,10 +43,13 @@ npx prisma migrate deploy
 ```
 
 ### C. Database Seeding in Production
-Seeding is blocked by default in production. To run the idempotent seed in production:
+Seeding is strictly blocked by default in production (`NODE_ENV=production`) to safeguard system state. To run the initial bootstrap seed in production:
 ```bash
 ALLOW_PRODUCTION_SEED=true npm run db:seed
 ```
+> [!CAUTION]
+> **CRITICAL SECURITY REQUIREMENT:**
+> **Immediately delete or unset `ALLOW_PRODUCTION_SEED` from Render environment variables / shell after initial seeding finishes. NEVER leave `ALLOW_PRODUCTION_SEED=true` persistent in Render environment configuration.**
 
 ---
 

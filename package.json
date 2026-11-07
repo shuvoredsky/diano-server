@@ -25,7 +25,8 @@
     "openapi:export": "tsx scripts/export-openapi.ts",
     "audit:routes": "tsx scripts/generate-route-matrix.ts",
     "openapi:coverage": "tsx scripts/openapi-coverage.ts",
-    "db:backup": "tsx scripts/db-backup.ts"
+    "db:backup": "tsx scripts/db-backup.ts",
+    "db:restore": "tsx scripts/db-restore.ts"
   },
   "keywords": [],
   "author": "",

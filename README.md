@@ -81,7 +81,9 @@ Ensure strong secrets are defined for `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
 | `npm run prisma:generate`| Generates Prisma client types |
 | `npm run openapi:export` | Exports complete OpenAPI 3.0 specification to `openapi.json` |
 | `npm run audit:routes` | Scans Express route tree and validates zero unprotected admin routes |
-| `npm run db:backup` | Dumps database tables to `backups/` using pure TypeScript client |
+| `npm run openapi:coverage` | Enforces 100% OpenAPI coverage against Express routes (fails if undocumented) |
+| `npm run db:backup` | Dumps database to `backups/` using PostgreSQL native `pg_dump -Fc` archive format |
+| `npm run db:restore` | Restores database dump via `pg_restore` (targets test DB by default; refuses production) |
 | `npm run storage:check` | Diagnostics: Tests Cloudinary credentials, uploads a probe image, and verifies cleanup |
 
 ---
@@ -274,5 +276,18 @@ Diano uses an in-memory single-instance Socket.IO server connected to an interna
   });
   ```
   When the Render container wakes upon incoming user interaction, the client automatically reconnects, re-runs the handshake verification, and rejoins all authorized rooms seamlessly.
+
+### 7. Production Database Seeding
+To initialize the system with default roles, permissions, administrative users, and system settings:
+```bash
+ALLOW_PRODUCTION_SEED=true npm run db:seed
+```
+> [!CAUTION]
+> **CRITICAL SECURITY STEP:**
+> **Immediately remove `ALLOW_PRODUCTION_SEED` from Render environment variables after deployment.** Seeding must only run once during initial system bootstrapping.
+
+### 8. Native PostgreSQL Backup & Restore
+- **Backup (`npm run db:backup`):** Uses native `pg_dump -Fc` to create custom-format compressed database archives in `backups/` (gitignored). Zero connection strings or credentials are logged.
+- **Restore (`npm run db:restore`):** Uses `pg_restore` to restore archives. Targets the test database by default; automatically refuses production databases unless `--i-know-what-im-doing` is explicitly passed.
 
 

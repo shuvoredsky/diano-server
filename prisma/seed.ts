@@ -130,8 +130,21 @@ export const permissionsData = [
 export const rolesData = SYSTEM_ROLES;
 
 export async function seedDatabase() {
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
-    throw new Error('❌ Refusing to run seed in production environment for security. To override, explicitly set ALLOW_PRODUCTION_SEED=true');
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+      throw new Error('❌ Refusing to run seed in production environment for security. To override, explicitly set ALLOW_PRODUCTION_SEED=true');
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      '\n' +
+      '********************************************************************************\n' +
+      '🚨 🚨 🚨  WARNING: SEEDING PRODUCTION DATABASE VIA ALLOW_PRODUCTION_SEED=true  🚨 🚨 🚨\n' +
+      '********************************************************************************\n' +
+      '⚠️  This should ONLY be run ONCE during initial bootstrap deployment.\n' +
+      '⚠️  CRITICAL: You MUST IMMEDIATELY REMOVE ALLOW_PRODUCTION_SEED from Render\n' +
+      '    environment variables after deployment to prevent accidental re-seeding!\n' +
+      '********************************************************************************\n'
+    );
   }
 
   // eslint-disable-next-line no-console
