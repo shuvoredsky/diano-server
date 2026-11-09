@@ -84,8 +84,8 @@ export const permissionsData = [
   // Fraud Detection
   { resource: 'fraud', action: 'read', name: 'Read Fraud Assessments', slug: 'fraud:read', description: 'View fraud scores and assessments' },
   { resource: 'fraud', action: 'review', name: 'Review Fraud Flags', slug: 'fraud:review', description: 'Approve or reject flagged orders' },
-  { resource: 'fraud', action: 'manage', name: 'Manage Fraud Rules', slug: 'fraud:manage', description: 'Configure scoring rules and thresholds' },
   { resource: 'fraud', action: 'rule_manage', name: 'Manage Fraud Rules Legacy', slug: 'fraud:rule_manage', description: 'Configure scoring rules' },
+  { resource: 'fraud', action: 'manage', name: 'Manage Fraud Rules', slug: 'fraud:manage', description: 'Configure scoring rules and thresholds' },
 
   // Returns
   { resource: 'return', action: 'read', name: 'Read Returns', slug: 'return:read', description: 'View return requests' },

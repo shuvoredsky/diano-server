@@ -17,6 +17,10 @@ vi.mock('@/config/database', () => ({
   },
 }));
 
+vi.mock('@/modules/notifications/notifications.utils', () => ({
+  isDhakaQuietHours: vi.fn().mockReturnValue(false),
+}));
+
 describe('AbandonedCheckoutService (Unit Tests)', () => {
   let mockRepo: {
     findSessionsToClassify: ReturnType<typeof vi.fn>;
