@@ -39,13 +39,13 @@ Use this checklist as the final gatekeeper prior to launching the DIANO platform
 ### 5. Scheduled Maintenance Jobs (cron-job.org)
 - [ ] 8 internal jobs configured on [cron-job.org](https://cron-job.org) with header `x-jobs-secret: <SECRET>`:
   - `process-notifications` (every 2 mins)
-  - `reconcile-pending-payments` (every 5 mins)
-  - `cleanup-expired-orders` (every 15 mins)
-  - `trigger-abandoned-recovery` (every 30 mins)
-  - `sync-inventory-aggregates` (hourly)
-  - `purge-old-notifications` (daily at 3:00 AM)
-  - `archive-stale-drafts` (daily at 4:00 AM)
-  - `cleanup-expired-tokens` (daily at 5:00 AM)
+  - `reconcile-payments` (every 10 mins)
+  - `release-expired-reservations` (every 10 mins)
+  - `classify-abandoned` (every 15 mins)
+  - `cancel-expired-orders` (every 30 mins)
+  - `cleanup-guest-carts` (daily at 3:00 AM UTC)
+  - `purge-checkout-pii` (daily at 4:00 AM UTC)
+  - `purge-old-notifications` (daily at 5:00 AM UTC)
 - [ ] Ping frequency ensures Render web service never sleeps during peak business hours.
 
 ### 6. Notifications & Communications

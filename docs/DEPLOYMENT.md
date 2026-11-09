@@ -134,14 +134,14 @@ Render free tier lacks a built-in cron scheduler. Use [cron-job.org](https://cro
 
 | Job Name | Frequency | Target URL | HTTP Header | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| **`process-notifications`** | Every 2 mins | `POST /api/v1/internal/jobs/process-notifications` | `x-jobs-secret: <SECRET>` | Dispatches outbox emails & SMS with exponential backoff. |
-| **`reconcile-pending-payments`** | Every 5 mins | `POST /api/v1/internal/jobs/reconcile-pending-payments` | `x-jobs-secret: <SECRET>` | Verifies stranded SSLCOMMERZ sessions and marks orders paid. |
-| **`cleanup-expired-orders`** | Every 15 mins | `POST /api/v1/internal/jobs/cleanup-expired-orders` | `x-jobs-secret: <SECRET>` | Cancels orders unpaid after 24h and restores reserved stock. |
-| **`trigger-abandoned-recovery`** | Every 30 mins | `POST /api/v1/internal/jobs/trigger-abandoned-recovery` | `x-jobs-secret: <SECRET>` | Sends recovery notifications (respecting Dhaka quiet hours). |
-| **`sync-inventory-aggregates`** | Every 1 hour | `POST /api/v1/internal/jobs/sync-inventory-aggregates` | `x-jobs-secret: <SECRET>` | Reconciles on-hand vs ledger balances across warehouses. |
-| **`purge-old-notifications`** | Daily (3:00 AM) | `POST /api/v1/internal/jobs/purge-old-notifications` | `x-jobs-secret: <SECRET>` | Archives sent/dead notifications older than 90 days. |
-| **`archive-stale-drafts`** | Daily (4:00 AM) | `POST /api/v1/internal/jobs/archive-stale-drafts` | `x-jobs-secret: <SECRET>` | Purges abandoned checkout sessions older than 30 days. |
-| **`cleanup-expired-tokens`** | Daily (5:00 AM) | `POST /api/v1/internal/jobs/cleanup-expired-tokens` | `x-jobs-secret: <SECRET>` | Cleans up revoked auth sessions and expired refresh tokens. |
+| **`process-notifications`** | Every 2 mins | `POST /api/v1/internal/jobs/process-notifications` | `x-jobs-secret: <SECRET>` | Drains Postgres notification outbox queue with exponential backoff & dead-letter tracking. |
+| **`reconcile-payments`** | Every 10 mins | `POST /api/v1/internal/jobs/reconcile-payments` | `x-jobs-secret: <SECRET>` | Verifies pending/stalled SSLCOMMERZ sessions and reconciles missed cold-start IPNs. |
+| **`release-expired-reservations`** | Every 10 mins | `POST /api/v1/internal/jobs/release-expired-reservations` | `x-jobs-secret: <SECRET>` | Releases expired variant stock reservations back into available inventory. |
+| **`classify-abandoned`** | Every 15 mins | `POST /api/v1/internal/jobs/classify-abandoned` | `x-jobs-secret: <SECRET>` | Marks inactive checkout funnels (>30 min) as abandoned for analytics and recovery. |
+| **`cancel-expired-orders`** | Every 30 mins | `POST /api/v1/internal/jobs/cancel-expired-orders` | `x-jobs-secret: <SECRET>` | Cancels unpaid orders past payment deadline and releases reserved inventory. |
+| **`cleanup-guest-carts`** | Daily (3:00 AM UTC) | `POST /api/v1/internal/jobs/cleanup-guest-carts` | `x-jobs-secret: <SECRET>` | Purges orphan guest carts older than 30 days. |
+| **`purge-checkout-pii`** | Daily (4:00 AM UTC) | `POST /api/v1/internal/jobs/purge-checkout-pii` | `x-jobs-secret: <SECRET>` | Anonymizes customer PII from expired checkout sessions older than 90 days. |
+| **`purge-old-notifications`** | Daily (5:00 AM UTC) | `POST /api/v1/internal/jobs/purge-old-notifications` | `x-jobs-secret: <SECRET>` | Purges sent/delivered/dead notifications older than 180 days. |
 
 ---
 
@@ -154,11 +154,14 @@ Render free web services enter sleep mode after 15 minutes of inactivity. Cold s
 
 ## 8. Backup & Disaster Recovery
 
-### Creating a Database Backup:
+### Creating & Restoring a Database Backup:
 ```bash
 npm run db:backup
+npm run db:restore
 ```
-- Dumps all tables to `backups/diano-db-backup-<timestamp>.json` with complete row integrity.
+- **Native Custom Archive (`pg_dump -Fc`):** Dumps all tables, constraints, and triggers to `backups/diano-db-backup-<timestamp>.dump` using native PostgreSQL custom compressed format.
+- **Safe Restore (`pg_restore`):** Targets `TEST_DATABASE_URL` by default and refuses production databases unless `--i-know-what-im-doing` is explicitly passed.
+- **Verification Proof:** See [`docs/BACKUP_RESTORE_PROOF.md`](./BACKUP_RESTORE_PROOF.md) for full TOC, 74-table row count, constraint, and trigger verification.
 - Never prints or logs connection strings or credentials.
 
 ### Neon Point-in-Time Recovery (PITR) & Instant Branching:

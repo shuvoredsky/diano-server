@@ -24,10 +24,10 @@ DIANO is an enterprise-grade e-commerce backend platform built as a clean Modula
 diano-server/
 ├── prisma/               # Prisma schema & seed scripts
 ├── src/
-│   ├── config/           # Validated env, DB client, Redis client
+│   ├── config/           # Validated env, DB client (Redis not used)
 │   ├── constants/        # System & domain constants
 │   ├── docs/             # API specifications & schema documentation
-│   ├── jobs/             # BullMQ queue processors & background workers
+│   ├── jobs/             # Background job helpers (Redis/BullMQ not used; Postgres Outbox used)
 │   ├── middlewares/      # Error handler, rate limiter, request-id, not-found
 │   ├── modules/          # Modular domain slices (auth, products, orders, etc.)
 │   ├── routes/           # Express routers (central rootRouter & health routes)
@@ -105,9 +105,8 @@ npm run storage:check
 - **Liveness Probe:** `GET /api/v1/health`
   - Returns `200 OK` if the HTTP server is alive. Works completely independently of external infrastructure.
 - **Readiness Probe:** `GET /api/v1/ready`
-  - Checks PostgreSQL database and Redis connectivity.
-  - Returns `200 OK` when both dependencies are ready.
-  - Returns `503 Service Unavailable` with details when any dependency is disconnected.
+  - Checks PostgreSQL database connectivity (Redis is not used in current architecture; offline Redis is gracefully handled).
+  - Returns `200 OK` when ready, or `503 Service Unavailable` with details when any checked dependency is disconnected.
 
 ---
 
