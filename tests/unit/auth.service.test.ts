@@ -112,7 +112,11 @@ describe('AuthService (Unit Tests with Mocked Repository)', () => {
       record: vi.fn().mockResolvedValue(undefined),
     };
 
-    authService = new AuthService(mockRepo, mockEmailSvc, mockAuditSvc);
+    const mockPermCache = {
+      getEffectivePermissions: vi.fn().mockResolvedValue([]),
+    };
+
+    authService = new AuthService(mockRepo, mockEmailSvc, mockAuditSvc, mockPermCache);
   });
 
   describe('Registration', () => {
@@ -487,6 +491,84 @@ describe('AuthService (Unit Tests with Mocked Repository)', () => {
       await expect(
         authService.verifyOtp('test@example.com', '123456', 'LOGIN'),
       ).rejects.toThrowError(/Maximum verification attempts exceeded/);
+    });
+  });
+
+  describe('Profile & Effective Permissions (getProfile / login)', () => {
+    it('returns empty permissions and isSuperAdmin=false for customer role', async () => {
+      const customerUser = createMockUser();
+      mockRepo.findUserById.mockResolvedValue(customerUser);
+
+      const profile = await authService.getProfile(customerUser.id);
+      expect(profile.roles).toEqual(['customer']);
+      expect(profile.permissions).toEqual([]);
+      expect(profile.isSuperAdmin).toBe(false);
+      expect(profile).not.toHaveProperty('passwordHash');
+    });
+
+    it('returns effective permission slugs and isSuperAdmin=false for support-staff role', async () => {
+      const mockPermCache = {
+        getEffectivePermissions: vi
+          .fn()
+          .mockResolvedValue(['customer:read', 'order:read', 'return:read', 'review:read']),
+      };
+      const svcWithPerm = new AuthService(mockRepo, mockEmailSvc, mockAuditSvc, mockPermCache);
+
+      const supportUser = createMockUser({
+        id: 'staff_support_1',
+        email: 'support@diano.com.bd',
+        roles: [
+          {
+            role: {
+              id: 'role_support',
+              name: 'Support Staff',
+              slug: 'support-staff',
+              type: 'SUPPORT_STAFF',
+            },
+          },
+        ],
+      });
+      mockRepo.findUserById.mockResolvedValue(supportUser);
+
+      const profile = await svcWithPerm.getProfile(supportUser.id);
+      expect(profile.roles).toEqual(['support-staff']);
+      expect(profile.permissions).toEqual([
+        'customer:read',
+        'order:read',
+        'return:read',
+        'review:read',
+      ]);
+      expect(profile.isSuperAdmin).toBe(false);
+      expect(mockPermCache.getEffectivePermissions).toHaveBeenCalledWith(['support-staff']);
+    });
+
+    it('returns full permission list and isSuperAdmin=true for super-admin role', async () => {
+      const fullSlugs = ['audit:view', 'customer:manage', 'customer:read', 'fraud:manage', 'order:read'];
+      const mockPermCache = {
+        getEffectivePermissions: vi.fn().mockResolvedValue(fullSlugs),
+      };
+      const svcWithPerm = new AuthService(mockRepo, mockEmailSvc, mockAuditSvc, mockPermCache);
+
+      const superAdminUser = createMockUser({
+        id: 'staff_super_1',
+        email: 'super@diano.com.bd',
+        roles: [
+          {
+            role: {
+              id: 'role_super',
+              name: 'Super Admin',
+              slug: 'super-admin',
+              type: 'SUPER_ADMIN',
+            },
+          },
+        ],
+      });
+      mockRepo.findUserById.mockResolvedValue(superAdminUser);
+
+      const profile = await svcWithPerm.getProfile(superAdminUser.id);
+      expect(profile.roles).toEqual(['super-admin']);
+      expect(profile.isSuperAdmin).toBe(true);
+      expect(profile.permissions).toEqual(fullSlugs);
     });
   });
 });

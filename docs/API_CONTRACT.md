@@ -77,6 +77,23 @@ All API responses follow a uniform JSON structure:
 ## 4. Authentication & Token Lifecycle
 - **Access Token:** Short-lived JWT (15 minutes). Sent in `Authorization: Bearer <token>` header.
 - **Refresh Token:** Long-lived rotating token (7 days). Stored in an **HttpOnly, Secure, SameSite=None** cookie (`diano_refresh_token`).
+- **Identity & Effective Permissions (`GET /api/v1/auth/me`, `POST /api/v1/auth/admin/login`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`):**
+  - The `user` summary object includes:
+    ```json
+    {
+      "id": "cuid",
+      "email": "staff@diano.com.bd",
+      "name": "Staff Name",
+      "phone": "+8801700000000",
+      "avatarUrl": null,
+      "roles": ["support-staff"],
+      "permissions": ["abandoned_checkout:read", "customer:read", "notification:read", "order:read", "return:read", "review:read"],
+      "isSuperAdmin": false
+    }
+    ```
+  - `permissions` contains only effective permission slugs (`string[]`), never internal database IDs or secrets.
+  - For `super-admin`, `isSuperAdmin` is `true` and `permissions` contains the full list of system permission slugs.
+  - For `customer` accounts, `permissions` is `[]` and `isSuperAdmin` is `false`.
 - **Token Refresh Flow:**
   - When an API request returns `401 Unauthorized`, intercept and call `POST /api/v1/auth/refresh` with credentials enabled (`credentials: 'include'`).
   - The server rotates the refresh token and returns a fresh access token in the response body.

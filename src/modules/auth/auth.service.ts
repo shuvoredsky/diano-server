@@ -24,26 +24,36 @@ import type {
   UpdateProfileInput,
 } from './auth.validation';
 import { ADMIN_ROLE_SLUGS } from '@/constants/roles';
+import { permissionsCache, type PermissionsCache } from '@/modules/permissions/permissions.cache';
 
 export class AuthService {
   constructor(
     private readonly repo: IAuthRepository = defaultAuthRepo,
     private readonly emailSvc: IEmailService = defaultEmailService,
     private readonly auditSvc: IAuditService = defaultAuditService,
+    private readonly permCache: Pick<PermissionsCache, 'getEffectivePermissions'> = permissionsCache,
   ) {}
 
   private extractRoleSlugs(user: UserWithRoles): string[] {
     return user.roles.map(r => r.role.slug);
   }
 
-  private formatUserSummary(user: UserWithRoles) {
+  private async formatUserSummary(user: UserWithRoles): Promise<AuthUserSummary> {
+    const roles = this.extractRoleSlugs(user);
+    const isSuperAdmin = roles.some(
+      r => r.toLowerCase() === 'super-admin' || r.toLowerCase() === 'super_admin',
+    );
+    const permissions = await this.permCache.getEffectivePermissions(roles);
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       phone: user.phone,
       avatarUrl: user.avatarUrl,
-      roles: this.extractRoleSlugs(user),
+      roles,
+      permissions,
+      isSuperAdmin,
     };
   }
 
@@ -301,7 +311,7 @@ export class AuthService {
     });
 
     return {
-      user: this.formatUserSummary(user),
+      user: await this.formatUserSummary(user),
       tokens: {
         accessToken,
         refreshToken: newRefreshTokenString,
@@ -517,7 +527,7 @@ export class AuthService {
     await this.repo.createRefreshToken({
       userId: user.id,
       tokenHash: refreshTokenHash,
-      familyId,
+      familyId: familyId,
       expiresAt: refreshExpiresAt,
     });
 
@@ -530,7 +540,7 @@ export class AuthService {
     });
 
     return {
-      user: this.formatUserSummary(user),
+      user: await this.formatUserSummary(user),
       tokens: {
         accessToken,
         refreshToken: refreshTokenString,

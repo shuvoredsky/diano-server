@@ -59,6 +59,15 @@ export const swaggerDocument = {
           avatarUrl: { type: 'string', nullable: true },
           status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'] },
           roles: { type: 'array', items: { type: 'string' } },
+          permissions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Effective granular permission slugs for the authenticated user',
+          },
+          isSuperAdmin: {
+            type: 'boolean',
+            description: 'True when the user holds the super-admin role',
+          },
         },
       },
       RegisterInput: {
@@ -225,9 +234,18 @@ export const swaggerDocument = {
     '/api/v1/auth/me': {
       get: {
         tags: ['Authentication'],
-        summary: 'Get current user identity',
+        summary: 'Get current user identity, roles, and effective permission slugs',
         security: [{ BearerAuth: [] }],
-        responses: { 200: { description: 'Profile retrieved' } },
+        responses: {
+          200: {
+            description: 'Profile retrieved with roles, permissions: string[], and isSuperAdmin',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UserResponse' },
+              },
+            },
+          },
+        },
       },
     },
 

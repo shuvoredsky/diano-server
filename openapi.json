@@ -91,6 +91,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Effective granular permission slugs for the authenticated user"
+          },
+          "isSuperAdmin": {
+            "type": "boolean",
+            "description": "True when the user holds the super-admin role"
           }
         }
       },
@@ -464,7 +475,7 @@
         "tags": [
           "Authentication"
         ],
-        "summary": "Get current user identity",
+        "summary": "Get current user identity, roles, and effective permission slugs",
         "security": [
           {
             "BearerAuth": []
@@ -472,7 +483,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Profile retrieved"
+            "description": "Profile retrieved with roles, permissions: string[], and isSuperAdmin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
           }
         }
       },

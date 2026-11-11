@@ -34,6 +34,10 @@ export const permissionsData = [
   { resource: 'role', action: 'update', name: 'Update Roles', slug: 'role:update', description: 'Modify roles and permissions' },
   { resource: 'role', action: 'delete', name: 'Delete Roles', slug: 'role:delete', description: 'Remove RBAC roles' },
 
+  // Customers
+  { resource: 'customer', action: 'read', name: 'Read Customers', slug: 'customer:read', description: 'View customer profiles, notes, and timelines' },
+  { resource: 'customer', action: 'manage', name: 'Manage Customers', slug: 'customer:manage', description: 'Update customer account status and record internal notes' },
+
   // Catalog
   { resource: 'product', action: 'read', name: 'Read Products', slug: 'product:read', description: 'View product catalog' },
   { resource: 'product', action: 'create', name: 'Create Products', slug: 'product:create', description: 'Add new products and variants' },
@@ -84,7 +88,6 @@ export const permissionsData = [
   // Fraud Detection
   { resource: 'fraud', action: 'read', name: 'Read Fraud Assessments', slug: 'fraud:read', description: 'View fraud scores and assessments' },
   { resource: 'fraud', action: 'review', name: 'Review Fraud Flags', slug: 'fraud:review', description: 'Approve or reject flagged orders' },
-  { resource: 'fraud', action: 'rule_manage', name: 'Manage Fraud Rules Legacy', slug: 'fraud:rule_manage', description: 'Configure scoring rules' },
   { resource: 'fraud', action: 'manage', name: 'Manage Fraud Rules', slug: 'fraud:manage', description: 'Configure scoring rules and thresholds' },
 
   // Returns
@@ -100,6 +103,7 @@ export const permissionsData = [
   // Notifications
   { resource: 'notification', action: 'read', name: 'Read Notifications', slug: 'notification:read', description: 'View notification logs' },
   { resource: 'notification', action: 'send', name: 'Send Notifications', slug: 'notification:send', description: 'Trigger manual notifications' },
+  { resource: 'notification', action: 'manage', name: 'Manage Notifications', slug: 'notification:manage', description: 'View notification outbox logs and retry failed notifications' },
 
   // Analytics & Audits
   { resource: 'analytics', action: 'view', name: 'View Analytics', slug: 'analytics:view', description: 'View sales and revenue metrics' },
@@ -155,19 +159,49 @@ export async function seedDatabase() {
   console.info(`Seeding ${permissionsData.length} granular permissions...`);
   const permissionMap = new Map<string, string>();
 
-  for (const perm of permissionsData) {
-    const record = await prisma.permission.upsert({
-      where: { slug: perm.slug },
-      update: { name: perm.name, description: perm.description },
-      create: {
-        name: perm.name,
-        slug: perm.slug,
-        resource: perm.resource,
-        action: perm.action,
-        description: perm.description,
-      },
-    });
+  await prisma.permission.createMany({
+    data: permissionsData.map(perm => ({
+      name: perm.name,
+      slug: perm.slug,
+      resource: perm.resource,
+      action: perm.action,
+      description: perm.description,
+    })),
+    skipDuplicates: true,
+  });
+
+  const existingPermRecords = await prisma.permission.findMany({
+    where: { slug: { in: permissionsData.map(p => p.slug) } },
+    select: { id: true, slug: true },
+  });
+  for (const record of existingPermRecords) {
     permissionMap.set(record.slug, record.id);
+  }
+
+  // Unify legacy fraud:rule_manage into fraud:manage safely without breaking existing role mappings
+  const legacyFraudRuleManage = await prisma.permission.findUnique({
+    where: { slug: 'fraud:rule_manage' },
+  });
+  const canonicalFraudManageId = permissionMap.get('fraud:manage');
+  if (legacyFraudRuleManage && canonicalFraudManageId) {
+    const existingLegacyRoleLinks = await prisma.rolePermission.findMany({
+      where: { permissionId: legacyFraudRuleManage.id },
+    });
+    if (existingLegacyRoleLinks.length > 0) {
+      await prisma.rolePermission.createMany({
+        data: existingLegacyRoleLinks.map(rp => ({
+          roleId: rp.roleId,
+          permissionId: canonicalFraudManageId,
+        })),
+        skipDuplicates: true,
+      });
+      await prisma.rolePermission.deleteMany({
+        where: { permissionId: legacyFraudRuleManage.id },
+      });
+    }
+    await prisma.permission.delete({
+      where: { id: legacyFraudRuleManage.id },
+    });
   }
 
   // 2. Seed Roles
@@ -212,6 +246,7 @@ export async function seedDatabase() {
   const managerRoleId = roleMap.get('manager');
   if (managerRoleId) {
     const managerAllowedPrefixes = [
+      'customer:',
       'product:read',
       'product:update',
       'category:read',
@@ -223,14 +258,17 @@ export async function seedDatabase() {
       'order:confirm',
       'order:ship',
       'order:cancel',
+      'abandoned_checkout:',
       'shipping:',
       'coupon:',
       'fraud:read',
       'fraud:review',
+      'fraud:manage',
       'return:',
       'refund:',
       'review:read',
       'review:moderate',
+      'notification:',
       'analytics:view',
       'analytics:view_finance',
       'report:export',
@@ -252,7 +290,9 @@ export async function seedDatabase() {
   const orderManagerRoleId = roleMap.get('order-manager');
   if (orderManagerRoleId) {
     const orderManagerAllowedPrefixes = [
+      'customer:read',
       'order:',
+      'abandoned_checkout:',
       'shipping:',
       'coupon:read',
       'fraud:read',
@@ -265,6 +305,39 @@ export async function seedDatabase() {
     for (const [slug, permId] of permissionMap.entries()) {
       if (orderManagerAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
         rolePermissionRows.push({ roleId: orderManagerRoleId, permissionId: permId });
+      }
+    }
+  }
+
+  const inventoryManagerRoleId = roleMap.get('inventory-manager');
+  if (inventoryManagerRoleId) {
+    const inventoryManagerAllowedPrefixes = [
+      'inventory:',
+      'warehouse:',
+      'supplier:',
+      'product:read',
+      'category:read',
+    ];
+    for (const [slug, permId] of permissionMap.entries()) {
+      if (inventoryManagerAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
+        rolePermissionRows.push({ roleId: inventoryManagerRoleId, permissionId: permId });
+      }
+    }
+  }
+
+  const supportStaffRoleId = roleMap.get('support-staff');
+  if (supportStaffRoleId) {
+    const supportStaffAllowedPrefixes = [
+      'customer:read',
+      'order:read',
+      'abandoned_checkout:read',
+      'return:read',
+      'review:read',
+      'notification:read',
+    ];
+    for (const [slug, permId] of permissionMap.entries()) {
+      if (supportStaffAllowedPrefixes.some(p => slug.startsWith(p) || slug === p)) {
+        rolePermissionRows.push({ roleId: supportStaffRoleId, permissionId: permId });
       }
     }
   }

@@ -45,6 +45,8 @@ export interface AuthUserSummary {
   phone?: string | null;
   avatarUrl?: string | null;
   roles: string[];
+  permissions: string[];
+  isSuperAdmin: boolean;
 }
 
 export interface AuthResult {

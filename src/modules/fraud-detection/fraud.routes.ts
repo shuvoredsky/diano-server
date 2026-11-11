@@ -10,13 +10,13 @@ adminFraudRouter.use(authenticate);
 // 1. Rules configuration
 adminFraudRouter.get(
   '/rules',
-  requirePermission('fraud:manage', 'fraud:rule_manage', 'fraud:read'),
+  requirePermission('fraud:manage', 'fraud:read'),
   fraudController.getRules,
 );
 
 adminFraudRouter.patch(
   '/rules/:key',
-  requirePermission('fraud:manage', 'fraud:rule_manage'),
+  requirePermission('fraud:manage'),
   fraudController.updateRule,
 );
 

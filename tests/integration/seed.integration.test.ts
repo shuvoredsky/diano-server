@@ -11,6 +11,9 @@ describe('Database Seed Idempotency Integration Test', () => {
     await expect(seedDatabase()).resolves.not.toThrow();
 
     const expectedSlugs = [
+      'customer:read',
+      'customer:manage',
+      'notification:manage',
       'fraud:read',
       'fraud:review',
       'fraud:manage',
@@ -36,6 +39,11 @@ describe('Database Seed Idempotency Integration Test', () => {
     for (const slug of expectedSlugs) {
       expect(foundSlugs).toContain(slug);
     }
+
+    const legacyFraudPerm = await prisma.permission.findUnique({
+      where: { slug: 'fraud:rule_manage' },
+    });
+    expect(legacyFraudPerm).toBeNull();
   }, 60000);
 
   it('is idempotent: running seedDatabase a second time succeeds without errors', async () => {
