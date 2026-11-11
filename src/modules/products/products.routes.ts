@@ -3,6 +3,8 @@ import rateLimit from 'express-rate-limit';
 import { productsController } from './products.controller';
 import { authenticate, requirePermission } from '@/middlewares/auth.middleware';
 import { handleUploadMultiple, handleUploadSingle } from '@/middlewares/upload.middleware';
+import { reviewsController } from '@/modules/reviews/reviews.controller';
+import { optionalReviewImagesUpload } from '@/modules/reviews/reviews.routes';
 
 export const productsRouter = Router();
 
@@ -160,3 +162,10 @@ productsRouter.delete(
 // Public Slug endpoints (placed after specific static segments)
 productsRouter.get('/:slug', productsController.getPublicBySlug);
 productsRouter.get('/:slug/related', productsController.getPublicRelated);
+productsRouter.get('/:slug/reviews', reviewsController.listPublicProductReviews);
+productsRouter.post(
+  '/:slug/reviews',
+  authenticate,
+  optionalReviewImagesUpload,
+  reviewsController.createCustomerReview,
+);

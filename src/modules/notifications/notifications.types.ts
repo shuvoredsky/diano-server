@@ -19,7 +19,8 @@ export type NotificationTemplateName =
   | 'low_stock_alert'
   | 'out_of_stock_alert'
   | 'fraud_review_alert'
-  | 'new_order_admin_alert';
+  | 'new_order_admin_alert'
+  | 'new_review_admin_alert';
 
 export type SupportedLocale = 'en' | 'bn';
 

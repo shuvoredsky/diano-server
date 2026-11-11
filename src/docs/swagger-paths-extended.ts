@@ -1148,4 +1148,182 @@ export const extendedSwaggerPaths: Record<string, Record<string, unknown>> = {
       },
     },
   },
+  '/api/v1/products/{slug}/reviews': {
+    get: {
+      tags: ['Reviews'],
+      summary: 'List approved product reviews and rating distribution summary',
+      parameters: [
+        { name: 'slug', in: 'path', required: true, schema: { type: 'string' } },
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        { name: 'rating', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5 } },
+      ],
+      responses: {
+        200: { description: 'Approved reviews and rating summary retrieved' },
+        404: { description: 'Product not found' },
+      },
+    },
+    post: {
+      tags: ['Reviews'],
+      summary: 'Submit a customer product review (verified delivered purchase required)',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'slug', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['rating', 'comment'],
+              properties: {
+                rating: { type: 'integer', minimum: 1, maximum: 5 },
+                title: { type: 'string', maxLength: 150 },
+                comment: { type: 'string', minLength: 3, maxLength: 2000 },
+                images: {
+                  type: 'array',
+                  maxItems: 5,
+                  items: { type: 'string', format: 'uri' },
+                },
+              },
+            },
+          },
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['rating', 'comment'],
+              properties: {
+                rating: { type: 'integer', minimum: 1, maximum: 5 },
+                title: { type: 'string', maxLength: 150 },
+                comment: { type: 'string', minLength: 3, maxLength: 2000 },
+                images: {
+                  type: 'array',
+                  items: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: 'Review submitted in PENDING status' },
+        403: { description: 'Verified delivered purchase required' },
+        409: { description: 'Duplicate review for user and product' },
+      },
+    },
+  },
+  '/api/v1/admin/reviews': {
+    get: {
+      tags: ['Admin Reviews Moderation'],
+      summary: 'List product reviews for moderation with status, rating, and product filters',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        {
+          name: 'status',
+          in: 'query',
+          schema: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] },
+        },
+        { name: 'rating', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5 } },
+        { name: 'productId', in: 'query', schema: { type: 'string' } },
+        { name: 'productSlug', in: 'query', schema: { type: 'string' } },
+        { name: 'search', in: 'query', schema: { type: 'string' } },
+      ],
+      responses: {
+        200: { description: 'Paginated reviews retrieved' },
+      },
+    },
+  },
+  '/api/v1/admin/reviews/{id}': {
+    get: {
+      tags: ['Admin Reviews Moderation'],
+      summary: 'Get single review details by ID',
+      security: [{ BearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        200: { description: 'Review details retrieved' },
+        404: { description: 'Review not found' },
+      },
+    },
+    delete: {
+      tags: ['Admin Reviews Moderation'],
+      summary: 'Soft-delete a review and recalculate product rating aggregate',
+      security: [{ BearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        200: { description: 'Review soft-deleted and rating recalculated' },
+        404: { description: 'Review not found' },
+      },
+    },
+  },
+  '/api/v1/admin/reviews/{id}/status': {
+    patch: {
+      tags: ['Admin Reviews Moderation'],
+      summary: 'Moderate review status (PENDING, APPROVED, REJECTED) and update product rating',
+      security: [{ BearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['status'],
+              properties: {
+                status: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] },
+                reason: { type: 'string', maxLength: 500 },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'Review status updated and product rating recalculated' },
+        404: { description: 'Review not found' },
+      },
+    },
+  },
+  '/api/v1/admin/audit-logs': {
+    get: {
+      tags: ['Admin Audit Logs'],
+      summary: 'List read-only system audit logs with actor, action, target, and Dhaka date filters',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        { name: 'actor', in: 'query', schema: { type: 'string' } },
+        { name: 'actorId', in: 'query', schema: { type: 'string' } },
+        {
+          name: 'actorType',
+          in: 'query',
+          schema: { type: 'string', enum: ['USER', 'SYSTEM', 'GUEST', 'WEBHOOK'] },
+        },
+        { name: 'action', in: 'query', schema: { type: 'string' } },
+        { name: 'targetType', in: 'query', schema: { type: 'string' } },
+        { name: 'targetId', in: 'query', schema: { type: 'string' } },
+        { name: 'from', in: 'query', schema: { type: 'string' }, description: 'Asia/Dhaka YYYY-MM-DD or ISO-8601' },
+        { name: 'to', in: 'query', schema: { type: 'string' }, description: 'Asia/Dhaka YYYY-MM-DD or ISO-8601' },
+        { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } },
+      ],
+      responses: {
+        200: { description: 'Paginated audit logs retrieved with redacted metadata' },
+        403: { description: 'Missing audit:view permission' },
+      },
+    },
+  },
+  '/api/v1/admin/audit-logs/{id}': {
+    get: {
+      tags: ['Admin Audit Logs'],
+      summary: 'Get single read-only audit log entry by ID',
+      security: [{ BearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        200: { description: 'Audit log details retrieved' },
+        403: { description: 'Missing audit:view permission' },
+        404: { description: 'Audit log not found' },
+      },
+    },
+  },
 };

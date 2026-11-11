@@ -41,6 +41,8 @@ import {
   customerNotificationsRouter,
   adminNotificationsRouter,
 } from '@/modules/notifications/notifications.routes';
+import { adminAuditLogsRouter } from '@/modules/audit-logs/audit-logs.routes';
+import { adminReviewsRouter } from '@/modules/reviews/reviews.routes';
 
 const rootRouter = Router();
 
@@ -141,6 +143,12 @@ rootRouter.use('/admin/reports', adminReportsRouter);
 // Notifications (Customer & Admin)
 rootRouter.use('/notifications', customerNotificationsRouter);
 rootRouter.use('/admin/notifications', adminNotificationsRouter);
+
+// Reviews Moderation (Admin)
+rootRouter.use('/admin/reviews', adminReviewsRouter);
+
+// Audit Logs (Admin Read-Only)
+rootRouter.use('/admin/audit-logs', adminAuditLogsRouter);
 
 export { rootRouter };
 

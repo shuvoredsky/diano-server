@@ -577,6 +577,8 @@ model Product {
   metaDescription  String?
   metaKeywords     String?
   viewCount        Int           @default(0)
+  averageRating    Decimal       @default(0.00) @db.Decimal(3, 2)
+  reviewCount      Int           @default(0)
   deletedAt        DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -1444,6 +1446,10 @@ model Review {
   comment            String
   isVerifiedPurchase Boolean      @default(false)
   status             ReviewStatus @default(PENDING)
+  moderationReason   String?
+  moderatedById      String?
+  moderatedAt        DateTime?
+  deletedAt          DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -1454,6 +1460,7 @@ model Review {
 
   @@unique([userId, productId])
   @@index([productId, status])
+  @@index([status, deletedAt])
 }
 
 model ReviewImage {

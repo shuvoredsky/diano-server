@@ -290,6 +290,16 @@ export function renderTemplate(
       };
     }
 
+    case 'new_review_admin_alert': {
+      const productName = escapeHtml(data.productName ?? 'Product');
+      const rating = escapeHtml(data.rating ?? '5');
+      return {
+        subject: `[Admin Alert] New Product Review Submitted: ${productName}`,
+        html: `<h3>New Review Pending Moderation</h3><p>A new <strong>${rating}-star</strong> review was submitted for <strong>${productName}</strong> and awaits moderation.</p>`,
+        text: `[Admin Alert] New ${rating}-star review submitted for ${productName} awaiting moderation.`,
+      };
+    }
+
     default: {
       const text = String(data.message ?? data.content ?? templateName);
       return {
