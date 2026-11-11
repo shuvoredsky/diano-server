@@ -1,4 +1,4 @@
-export type ReviewStatusType = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ReviewStatusType = 'PENDING' | 'APPROVED' | 'REJECTED' | 'FLAGGED';
 
 export interface ReviewImageDto {
   id: string;
