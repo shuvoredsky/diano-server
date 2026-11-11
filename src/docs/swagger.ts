@@ -2168,7 +2168,7 @@ export const swaggerDocument = {
     '/api/v1/admin/analytics/overview': {
       get: {
         tags: ['Admin Analytics'],
-        summary: '12 KPI cards overview with period comparison',
+        summary: '13 KPI cards overview (including deliveredSales) with period comparison',
         security: [{ BearerAuth: [] }],
         responses: { 200: { description: 'Overview KPI cards' } },
       },
@@ -2232,9 +2232,30 @@ export const swaggerDocument = {
     '/api/v1/admin/analytics/charts/{type}': {
       get: {
         tags: ['Admin Analytics'],
-        summary: 'Gap-filled chart time-series and distributions',
+        summary: 'Gap-filled chart time-series and distributions (including shipment-status and stock-by-subcategory)',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'type', in: 'path', required: true, schema: { type: 'string' } }],
+        parameters: [
+          {
+            name: 'type',
+            in: 'path',
+            required: true,
+            schema: {
+              type: 'string',
+              enum: [
+                'sales-trend',
+                'orders-trend',
+                'profit-trend',
+                'payment-method-pie',
+                'order-status-pie',
+                'top-categories-bar',
+                'hourly-heatmap',
+                'district-choropleth-data',
+                'shipment-status',
+                'stock-by-subcategory',
+              ],
+            },
+          },
+        ],
         responses: { 200: { description: 'Chart series' } },
       },
     },

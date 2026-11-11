@@ -157,3 +157,20 @@ To prevent duplicate financial transactions during network retries:
   - `POST /api/v1/banners` (Hero/secondary banners)
   - `POST /api/v1/customers/me/avatar` (User avatar)
 
+---
+
+## 10. Reviews Moderation, Audit Logs & Analytics Extensions
+- **Reviews & Ratings:**
+  - `GET /api/v1/products/:slug/reviews`: Public endpoint returning only `APPROVED` non-deleted reviews, pagination, and `summary: { averageRating, totalReviews, distribution: { 1..5 } }`.
+  - `POST /api/v1/products/:slug/reviews`: Authenticated customer endpoint. Requires a verified `DELIVERED` order item for the product, enforces 1 review per `userId + productId`, strips XSS/HTML tags, accepts optional review images (up to 5 via `multipart/form-data` or URL array), creates the review in `PENDING` status, and enqueues an admin notification (`new_review_admin_alert`).
+  - `GET /api/v1/admin/reviews` & `GET /api/v1/admin/reviews/:id`: Requires `review:read` or `review:moderate`.
+  - `PATCH /api/v1/admin/reviews/:id/status`: Requires `review:moderate`. Accepts `{ status: "PENDING" | "APPROVED" | "REJECTED", reason?: string }` and transactionally recalculates `Product.averageRating` and `Product.reviewCount`.
+  - `DELETE /api/v1/admin/reviews/:id`: Requires `review:moderate`. Soft-deletes the review and recalculates product rating aggregate.
+- **Read-Only Audit Logs (Append-Only):**
+  - `GET /api/v1/admin/audit-logs` & `GET /api/v1/admin/audit-logs/:id`: Requires `audit:view`. Supports `actor`, `actorId`, `actorType`, `action`, `targetType`, `targetId`, `from`/`to` (Asia/Dhaka date range), `page`, `limit`, and `sortOrder`. Recursively strips sensitive keys (`password`, `token`, `secret`, `authorization`, etc.) and masks IP addresses for non-super-admin viewers.
+- **Dashboard Analytics & Charts:**
+  - `GET /api/v1/admin/analytics/overview` includes `cards.deliveredSales` alongside `grossSales`, `netSales`, `totalOrders`, `undeliveredOrdersCount`, `grossProfit`, and `netProfit`.
+  - `GET /api/v1/admin/analytics/charts/:type` supports `shipment-status` (shipment status distribution) and `stock-by-subcategory` (grouped parent -> child category stock units) in addition to existing chart types.
+  - Inventory valuation & stock KPIs (`totalProducts`, `totalStockUnits`, `stockValue`, `damaged`, `damageValue`, `netStockValue`) are served by `GET /api/v1/inventory/summary`.
+
+

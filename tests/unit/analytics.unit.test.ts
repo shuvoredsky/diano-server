@@ -8,6 +8,7 @@ describe('AnalyticsService Unit Tests', () => {
     discounts: 1000,
     refunds: 500,
     netSales: 8500,
+    deliveredSales: 6500,
     totalOrders: 20,
     cancelledOrders: 2,
     cancellationRate: 10,
@@ -77,6 +78,49 @@ describe('AnalyticsService Unit Tests', () => {
 
     expect(overview.cards.grossProfit?.current).toBe(4500);
     expect(overview.cards.netProfit?.current).toBe(3150);
+    expect(overview.cards.deliveredSales.current).toBe(6500);
+  });
+
+  it('serves shipment-status and stock-by-subcategory chart series', async () => {
+    const mockRepo: IAnalyticsRepository = {
+      getOverviewMetrics: vi.fn(),
+      getRevenueMetrics: vi.fn(),
+      getOrdersMetrics: vi.fn(),
+      getProductsMetrics: vi.fn(),
+      getInventoryMetrics: vi.fn(),
+      getCustomersMetrics: vi.fn(),
+      getPaymentsMetrics: vi.fn(),
+      getFunnelMetrics: vi.fn(),
+      getChartData: vi.fn().mockImplementation(async (type: string) => {
+        if (type === 'shipment-status') {
+          return [
+            { bucket: 'DELIVERED', status: 'DELIVERED', count: 12, percent: 80 },
+            { bucket: 'IN_TRANSIT', status: 'IN_TRANSIT', count: 3, percent: 20 },
+          ];
+        }
+        return [
+          {
+            bucket: 'Men -> Panjabi',
+            categoryId: 'cat_child',
+            categoryName: 'Panjabi',
+            parentCategoryId: 'cat_parent',
+            parentCategoryName: 'Men',
+            onHandUnits: 120,
+            availableUnits: 110,
+            damagedUnits: 2,
+          },
+        ];
+      }),
+    };
+
+    const service = new AnalyticsService(mockRepo, 60);
+    const shipmentChart = await service.getChart('shipment-status', { period: 'this_month' });
+    const stockSubcatChart = await service.getChart('stock-by-subcategory', {
+      period: 'this_month',
+    });
+
+    expect(shipmentChart).toHaveLength(2);
+    expect(stockSubcatChart).toHaveLength(1);
   });
 
   it('serves responses from in-memory cache on consecutive calls', async () => {

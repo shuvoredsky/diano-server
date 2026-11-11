@@ -109,6 +109,11 @@ export class AnalyticsService {
     const cards = {
       grossSales: this.buildKpiCard(currentRaw.grossSales, previousRaw.grossSales, 'currency'),
       netSales: this.buildKpiCard(currentRaw.netSales, previousRaw.netSales, 'currency'),
+      deliveredSales: this.buildKpiCard(
+        currentRaw.deliveredSales ?? 0,
+        previousRaw.deliveredSales ?? 0,
+        'currency',
+      ),
       totalOrders: this.buildKpiCard(currentRaw.totalOrders, previousRaw.totalOrders, 'count'),
       aov: this.buildKpiCard(currentRaw.aov, previousRaw.aov, 'currency'),
       itemsSold: this.buildKpiCard(currentRaw.itemsSold, previousRaw.itemsSold, 'count'),

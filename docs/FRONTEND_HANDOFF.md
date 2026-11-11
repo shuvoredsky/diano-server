@@ -68,8 +68,10 @@ Every JSON response from the server strictly adheres to this envelope:
 | **Customers** | `/admin/customers` | `customer:read` | Users |
 | **CMS: Pages & Banners**| `/admin/cms` | `cms:manage` | Storefront |
 | **Reports & BI** | `/admin/reports` | `reports:read` | Analytics |
-| **Notifications Queue**| `/admin/notifications` | `settings:manage` | System |
-| **Expenses** | `/admin/expenses` | `expense:read` | Finance |
+| **Notifications Queue**| `/admin/notifications` | `notification:read`, `notification:manage` | System |
+| **Expenses** | `/admin/expenses` | `expense:manage` | Finance |
+| **Reviews Moderation** | `/admin/reviews` | `review:read`, `review:moderate` | Customer Care |
+| **Audit Logs** | `/admin/audit-logs` | `audit:view` | Security |
 | **Staff & Roles** | `/admin/users` | `user:read`, `role:read` | Administration |
 
 ---
@@ -93,12 +95,31 @@ Every JSON response from the server strictly adheres to this envelope:
 
 ### Screen 2: Dashboard & Real-Time KPIs
 - **Route:** `/admin/dashboard`
-- **Permissions:** `order:read`
+- **Permissions:** `analytics:view`, `analytics:view_finance`, `inventory:read`, `inventory:view_cost`
 - **Primary Endpoints:**
-  - `GET /api/v1/admin/analytics/overview?period=day|week|month|year`:
-    Returns gross revenue, net revenue, total orders, average order value (AOV), active customers, and stock alerts.
-  - `GET /api/v1/admin/analytics/revenue-chart?startDate=...&endDate=...&interval=day`: Time-series revenue points for Recharts/Chart.js.
-  - `GET /api/v1/admin/fraud/stats`: Total held orders, review count, risk distribution.
+  - `GET /api/v1/admin/analytics/overview?period=today|yesterday|last_7_days|last_30_days|this_week|last_week|this_month|last_month|this_year|last_year|custom`:
+    Returns KPI cards (`grossSales`, `netSales`, `deliveredSales`, `totalOrders`, `aov`, `itemsSold`, `cancellationRate`, `returnRate`, `customerCount`, `repeatCustomerRate`, `grossProfit`, `netProfit`, `undeliveredOrdersCount`) with period comparison.
+  - `GET /api/v1/admin/analytics/revenue?period=...`: Returns `grossSales`, `discounts`, `refunds`, `netSales`, `cogs`, `grossProfit`, `expenses` (`total` + `byCategory`), `paymentFees`, and `netProfit`.
+  - `GET /api/v1/inventory/summary`: Returns inventory stock & valuation KPIs (`totalProducts`, `totalStockUnits`, `stockValue`, `damaged`, `damageValue`, `netStockValue`). Note: Inventory KPIs are intentionally served from `/api/v1/inventory/summary` and are not duplicated inside `/api/v1/admin/analytics/overview`.
+  - `GET /api/v1/admin/analytics/charts/:type`: Supports `sales-trend`, `orders-trend`, `profit-trend`, `payment-method-pie`, `order-status-pie`, `top-categories-bar`, `hourly-heatmap`, `district-choropleth-data`, `shipment-status`, and `stock-by-subcategory`.
+
+#### Dashboard 12 KPIs — Endpoint & Permission Mapping Table
+
+| # | Dashboard KPI Card | Source Endpoint | Response Field Path | Required Permission(s) |
+|:--|:---|:---|:---|:---|
+| 1 | **Total Products** | `GET /api/v1/inventory/summary` | `data.totalProducts` | `inventory:read` |
+| 2 | **Total Stock Units** | `GET /api/v1/inventory/summary` | `data.totalStockUnits` | `inventory:read` |
+| 3 | **Stock Value** | `GET /api/v1/inventory/summary` | `data.stockValue` | `inventory:read` + `inventory:view_cost` |
+| 4 | **Damaged Units** | `GET /api/v1/inventory/summary` | `data.damaged` | `inventory:read` |
+| 5 | **Damage Value** | `GET /api/v1/inventory/summary` | `data.damageValue` | `inventory:read` + `inventory:view_cost` |
+| 6 | **Net Stock Value** | `GET /api/v1/inventory/summary` | `data.netStockValue` | `inventory:read` + `inventory:view_cost` |
+| 7 | **Gross Sales / Total Sales** | `GET /api/v1/admin/analytics/overview` | `data.cards.grossSales` (or `netSales`) | `analytics:view` |
+| 8 | **Delivered Sales** | `GET /api/v1/admin/analytics/overview` | `data.cards.deliveredSales` | `analytics:view` |
+| 9 | **Total Orders** | `GET /api/v1/admin/analytics/overview` | `data.cards.totalOrders` | `analytics:view` |
+| 10 | **Undelivered Orders** | `GET /api/v1/admin/analytics/overview` | `data.cards.undeliveredOrdersCount` | `analytics:view` |
+| 11 | **Total Expenses** | `GET /api/v1/admin/analytics/revenue` | `data.expenses.total` | `analytics:view` + `analytics:view_finance` |
+| 12 | **Gross / Net Profit** | `GET /api/v1/admin/analytics/overview` | `data.cards.grossProfit` / `data.cards.netProfit` | `analytics:view` + `analytics:view_finance` |
+
 - **Socket.IO Real-Time Events:**
   - Room: `admin:perm:order:read`
   - Event: `order:created` -> Updates live orders counter badge and latest orders table.
@@ -300,11 +321,32 @@ Every JSON response from the server strictly adheres to this envelope:
 
 ### Screen 19: Operating Expenses & Financial Audits
 - **Route:** `/admin/expenses`
-- **Permissions:** `expense:read`, `expense:create`, `expense:update`, `expense:delete`
+- **Permissions:** `expense:manage`
 - **Primary Endpoints:**
   - `GET /api/v1/admin/expenses`: Filterable ledger by category (`PACKAGING`, `SHIPPING`, `MARKETING`, `SALARIES`, `WAREHOUSE_RENT`, `OFFICE_SUPPLIES`, `SOFTWARE_FEES`, `OTHER`).
   - `POST /api/v1/admin/expenses`: Record operating expense (`amount`, `category`, `incurredAt`, `notes`, `receiptUrl`).
-  - `GET /api/v1/admin/analytics/profit-loss`: Net profit margin calculation combining gross sales, cost of goods sold (COGS), refunds, and operating expenses.
+  - `GET /api/v1/admin/analytics/revenue`: Net profit margin calculation combining gross sales, cost of goods sold (COGS), refunds, and operating expenses.
+
+---
+
+### Screen 20: Reviews & Moderation Queue
+- **Route:** `/admin/reviews`
+- **Permissions:** `review:read`, `review:moderate`
+- **Primary Endpoints:**
+  - `GET /api/v1/admin/reviews`: Filterable moderation queue (`status`: `PENDING | APPROVED | REJECTED`, `rating`: `1..5`, `productId`, `productSlug`, `search`, `page`, `limit`).
+  - `GET /api/v1/admin/reviews/:id`: Single review detail with customer summary, product info, and uploaded review images.
+  - `PATCH /api/v1/admin/reviews/:id/status`: Transition review status (`PENDING | APPROVED | REJECTED` + optional `reason`) and atomically recalculate `Product.averageRating` and `Product.reviewCount`.
+  - `DELETE /api/v1/admin/reviews/:id`: Soft-delete review and recalculate product rating aggregate.
+  - Storefront endpoints: `GET /api/v1/products/:slug/reviews` (public approved reviews + rating distribution summary) and `POST /api/v1/products/:slug/reviews` (verified delivered purchase required).
+
+---
+
+### Screen 21: Read-Only System Audit Logs
+- **Route:** `/admin/audit-logs`
+- **Permissions:** `audit:view`
+- **Primary Endpoints:**
+  - `GET /api/v1/admin/audit-logs`: Append-only, read-only audit log explorer with filters (`actor`, `actorId`, `actorType`, `action`, `targetType`, `targetId`, `from`, `to` in `Asia/Dhaka`, `page`, `limit`, `sortOrder`).
+  - `GET /api/v1/admin/audit-logs/:id`: Single audit log entry detail with recursive sensitive metadata redaction and role-aware IP masking.
 
 ---
 

@@ -45,6 +45,8 @@ export const chartTypeEnum = z.enum([
   'top-categories-bar',
   'hourly-heatmap',
   'district-choropleth-data',
+  'shipment-status',
+  'stock-by-subcategory',
 ]);
 
 export const chartQuerySchema = analyticsQuerySchema.extend({

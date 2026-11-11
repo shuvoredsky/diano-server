@@ -293,6 +293,9 @@ describe('Analytics Module Integration Tests', () => {
     // netSales = grossSales (4500) - discounts (200) - completed refund (300) = 4000
     expect(cards.netSales.current).toBeGreaterThanOrEqual(4000);
 
+    // deliveredSales: Order 2 was DELIVERED today with grandTotal 1560
+    expect(cards.deliveredSales.current).toBeGreaterThanOrEqual(1560);
+
     // COGS is 100% complete so grossProfit is not null
     expect(cards.grossProfit.current).not.toBeNull();
     expect(cards.netProfit.current).not.toBeNull();
@@ -385,5 +388,25 @@ describe('Analytics Module Integration Tests', () => {
     expect(res.body.data).toBeInstanceOf(Array);
     // Hourly chart for today should have continuous hourly buckets
     expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('serves shipment-status and stock-by-subcategory charts to admin', async () => {
+    const [shipmentRes, stockSubcatRes] = await Promise.all([
+      request(app)
+        .get('/api/v1/admin/analytics/charts/shipment-status?period=today')
+        .set('Authorization', adminToken),
+      request(app)
+        .get('/api/v1/admin/analytics/charts/stock-by-subcategory?period=today')
+        .set('Authorization', adminToken),
+    ]);
+
+    expect(shipmentRes.status).toBe(200);
+    expect(shipmentRes.body.data).toBeInstanceOf(Array);
+
+    expect(stockSubcatRes.status).toBe(200);
+    expect(stockSubcatRes.body.data).toBeInstanceOf(Array);
+    expect(stockSubcatRes.body.data.length).toBeGreaterThanOrEqual(1);
+    expect(stockSubcatRes.body.data[0]).toHaveProperty('onHandUnits');
+    expect(stockSubcatRes.body.data[0]).toHaveProperty('availableUnits');
   });
 });

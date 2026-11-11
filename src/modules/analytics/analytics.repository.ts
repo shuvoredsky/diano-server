@@ -15,6 +15,7 @@ export interface OverviewMetricsRaw {
   discounts: number;
   refunds: number;
   netSales: number;
+  deliveredSales: number;
   totalOrders: number;
   cancelledOrders: number;
   cancellationRate: number;
@@ -167,6 +168,18 @@ export class AnalyticsRepository implements IAnalyticsRepository {
         ? Math.round((cancelledOrders / totalOrders) * 10000) / 100
         : 0;
 
+    // 1b. Delivered sales in period (sum of grandTotal where status = 'DELIVERED' and deliveredAt in [start, end))
+    const deliveredAgg = await prisma.$queryRaw<
+      Array<{ delivered_sales: string | null }>
+    >`
+      SELECT COALESCE(SUM(o."grandTotal"), 0)::text as delivered_sales
+      FROM "Order" o
+      WHERE o.status = 'DELIVERED'
+        AND COALESCE(o."deliveredAt", o."placedAt") >= ${start}
+        AND COALESCE(o."deliveredAt", o."placedAt") < ${end}
+    `;
+    const deliveredSalesDec = new Decimal(deliveredAgg[0]?.delivered_sales || '0');
+
     // 2. Refunds completed in period
     const refundAgg = await prisma.$queryRaw<Array<{ total_refunds: string | null }>>`
       SELECT COALESCE(SUM(amount), 0)::text as total_refunds
@@ -291,6 +304,7 @@ export class AnalyticsRepository implements IAnalyticsRepository {
       discounts: discountTotalDec.toNumber(),
       refunds: refundsDec.toNumber(),
       netSales: netSalesDec.toNumber(),
+      deliveredSales: deliveredSalesDec.toNumber(),
       totalOrders,
       cancelledOrders,
       cancellationRate,
@@ -1231,6 +1245,82 @@ export class AnalyticsRepository implements IAnalyticsRepository {
           bucket: r.district,
           orderCount: Number(r.order_count),
           revenue: Number(new Decimal(r.revenue).toFixed(2)),
+        }));
+      }
+
+      case 'shipment-status': {
+        const rows = await prisma.$queryRaw<
+          Array<{
+            status: string;
+            count: bigint;
+          }>
+        >`
+          SELECT
+            s.status::text as status,
+            COUNT(s.id) as count
+          FROM "Shipment" s
+          WHERE s."createdAt" >= ${start} AND s."createdAt" < ${end}
+          GROUP BY s.status
+          ORDER BY COUNT(s.id) DESC
+        `;
+        const totalShipments = rows.reduce((sum, r) => sum + Number(r.count), 0);
+        return rows.map(r => {
+          const count = Number(r.count);
+          return {
+            bucket: r.status,
+            status: r.status,
+            count,
+            percent:
+              totalShipments > 0
+                ? Math.round((count / totalShipments) * 10000) / 100
+                : 0,
+          };
+        });
+      }
+
+      case 'stock-by-subcategory': {
+        const rows = await prisma.$queryRaw<
+          Array<{
+            category_id: string;
+            category_name: string;
+            parent_category_id: string | null;
+            parent_category_name: string | null;
+            bucket_label: string;
+            on_hand_units: bigint;
+            available_units: bigint;
+            damaged_units: bigint;
+          }>
+        >`
+          SELECT
+            c.id as category_id,
+            c.name as category_name,
+            parent.id as parent_category_id,
+            parent.name as parent_category_name,
+            CASE
+              WHEN parent.name IS NOT NULL THEN parent.name || ' -> ' || c.name
+              ELSE c.name
+            END as bucket_label,
+            COALESCE(SUM(inv."onHand"), 0) as on_hand_units,
+            COALESCE(SUM(GREATEST(inv."onHand" - inv.reserved - inv.damaged, 0)), 0) as available_units,
+            COALESCE(SUM(inv.damaged), 0) as damaged_units
+          FROM "Category" c
+          LEFT JOIN "Category" parent ON c."parentId" = parent.id
+          JOIN "Product" p ON p."categoryId" = c.id AND p."deletedAt" IS NULL
+          JOIN "ProductVariant" pv ON pv."productId" = p.id AND pv."deletedAt" IS NULL
+          LEFT JOIN "Inventory" inv ON inv."variantId" = pv.id
+          WHERE c."deletedAt" IS NULL
+          GROUP BY c.id, c.name, parent.id, parent.name
+          ORDER BY COALESCE(SUM(inv."onHand"), 0) DESC, c.name ASC
+        `;
+        return rows.map(r => ({
+          bucket: r.bucket_label,
+          categoryId: r.category_id,
+          categoryName: r.category_name,
+          parentCategoryId: r.parent_category_id,
+          parentCategoryName: r.parent_category_name,
+          onHandUnits: Number(r.on_hand_units),
+          availableUnits: Number(r.available_units),
+          damagedUnits: Number(r.damaged_units),
         }));
       }
 

@@ -23,6 +23,7 @@ export interface AnalyticsOverviewResponse {
   cards: {
     grossSales: KpiCard<number>;
     netSales: KpiCard<number>;
+    deliveredSales: KpiCard<number>;
     totalOrders: KpiCard<number>;
     aov: KpiCard<number>;
     itemsSold: KpiCard<number>;
@@ -193,7 +194,9 @@ export type ChartType =
   | 'order-status-pie'
   | 'top-categories-bar'
   | 'hourly-heatmap'
-  | 'district-choropleth-data';
+  | 'district-choropleth-data'
+  | 'shipment-status'
+  | 'stock-by-subcategory';
 
 export interface ChartDataPoint {
   label: string;
