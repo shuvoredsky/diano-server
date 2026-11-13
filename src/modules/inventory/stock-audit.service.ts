@@ -1,5 +1,6 @@
 import { AppError } from '@/utils/app-error';
 import { auditService, type IAuditService } from '@/services/audit.service';
+import { prisma } from '@/config/database';
 import { inventoryRepository } from './inventory.repository';
 import { inventoryService } from './inventory.service';
 import { stockAuditRepository } from './stock-audit.repository';
@@ -109,30 +110,58 @@ export class StockAuditService {
 
   /**
    * Approve Stock Audit:
-   * Reconciles physical count differences strictly via ledger adjustment movements!
-   * NEVER updates inventory directly.
+   * Reconciles physical count differences strictly via ledger adjustment movements atomically!
+   * Acquires row lock on StockAudit to prevent concurrent double-approvals.
    */
   async approveAudit(id: string, approverId: string): Promise<StockAuditEntity> {
-    const audit = await this.getAuditById(id);
+    const { updated, warehouseId, reconciledItems } = await prisma.$transaction(
+      async tx => {
+        // Row lock on StockAudit row to serialize concurrent approve calls
+        await tx.$queryRaw`SELECT id FROM "StockAudit" WHERE id = ${id} FOR UPDATE`;
 
-    if (audit.status !== 'IN_PROGRESS') {
-      throw AppError.badRequest(`Cannot approve an audit in status '${audit.status}'`);
-    }
+        const audit = await this.repo.findAuditById(id, tx);
+        if (!audit) {
+          throw AppError.notFound(`Stock audit '${id}' not found`);
+        }
 
-    // Process all variances through inventoryService.adjustStock
-    for (const item of audit.items ?? []) {
-      if (item.variance !== 0) {
-        await this.invService.adjustStock({
-          variantId: item.variantId,
+        if (audit.status !== 'IN_PROGRESS') {
+          throw AppError.badRequest(`Cannot approve an audit in status '${audit.status}'`);
+        }
+
+        // Process all variances through inventoryService.adjustStock within tx
+        const varianceItems = (audit.items ?? []).filter(i => i.variance !== 0);
+        for (const item of varianceItems) {
+          await this.invService.adjustStock(
+            {
+              variantId: item.variantId,
+              warehouseId: audit.warehouseId,
+              quantity: item.variance,
+              reason: `Stock audit reconciliation [Audit ID: ${audit.id}]. Variance: ${item.variance > 0 ? '+' : ''}${item.variance}`,
+              actorId: approverId,
+            },
+            tx,
+          );
+        }
+
+        const updatedAudit = await this.repo.updateAuditStatus(
+          id,
+          'APPROVED',
+          undefined,
+          new Date(),
+          tx,
+        );
+
+        return {
+          updated: updatedAudit,
           warehouseId: audit.warehouseId,
-          quantity: item.variance,
-          reason: `Stock audit reconciliation [Audit ID: ${audit.id}]. Variance: ${item.variance > 0 ? '+' : ''}${item.variance}`,
-          actorId: approverId,
-        });
-      }
-    }
-
-    const updated = await this.repo.updateAuditStatus(id, 'APPROVED', undefined, new Date());
+          reconciledItems: varianceItems.length,
+        };
+      },
+      {
+        maxWait: 10000,
+        timeout: 25000,
+      },
+    );
 
     await this.auditSvc.record({
       actorId: approverId,
@@ -141,8 +170,8 @@ export class StockAuditService {
       targetType: 'STOCK_AUDIT',
       targetId: id,
       metadata: {
-        warehouseId: audit.warehouseId,
-        reconciledItems: audit.items?.filter(i => i.variance !== 0).length ?? 0,
+        warehouseId,
+        reconciledItems,
       },
     });
 

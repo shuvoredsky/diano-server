@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { prisma } from '@/config/database';
 import { StockAuditService } from '@/modules/inventory/stock-audit.service';
 import type {
   IStockAuditRepository,
@@ -104,6 +105,13 @@ describe('StockAuditService (Unit Tests: Variance & Ledger Reconciliation)', () 
       record: vi.fn().mockResolvedValue(undefined),
     } as unknown as AuditLogService;
 
+    vi.spyOn(prisma, '$transaction').mockImplementation(((callback: (tx: unknown) => Promise<unknown>) =>
+      callback({
+        ...prisma,
+        $queryRaw: vi.fn().mockResolvedValue([{ id: 'audit-1' }]),
+      })) as never,
+    );
+
     service = new StockAuditService(mockRepo, mockInvRepo, mockInvService, mockAudit);
   });
 
@@ -188,6 +196,7 @@ describe('StockAuditService (Unit Tests: Variance & Ledger Reconciliation)', () 
           quantity: -2,
           actorId: 'admin-supervisor',
         }),
+        expect.anything(),
       );
 
       // var-2 had variance +5
@@ -198,6 +207,7 @@ describe('StockAuditService (Unit Tests: Variance & Ledger Reconciliation)', () 
           quantity: 5,
           actorId: 'admin-supervisor',
         }),
+        expect.anything(),
       );
 
       // var-3 had variance 0, so adjustStock should NOT be called for var-3
@@ -209,6 +219,7 @@ describe('StockAuditService (Unit Tests: Variance & Ledger Reconciliation)', () 
         'APPROVED',
         undefined,
         expect.any(Date),
+        expect.anything(),
       );
       expect(result.status).toBe('APPROVED');
     });

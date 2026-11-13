@@ -1,4 +1,5 @@
 import { prisma } from '@/config/database';
+import type { Prisma } from '@prisma/client';
 import type {
   IStockAuditRepository,
   StockAuditEntity,
@@ -32,8 +33,9 @@ export class StockAuditRepository implements IStockAuditRepository {
     return created as unknown as StockAuditEntity;
   }
 
-  async findAuditById(id: string): Promise<StockAuditEntity | null> {
-    const audit = await prisma.stockAudit.findUnique({
+  async findAuditById(id: string, tx?: Prisma.TransactionClient): Promise<StockAuditEntity | null> {
+    const client = tx || prisma;
+    const audit = await client.stockAudit.findUnique({
       where: { id },
       include: {
         warehouse: {
@@ -117,8 +119,10 @@ export class StockAuditRepository implements IStockAuditRepository {
     status: string,
     discrepanciesFound?: number,
     completedAt?: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<StockAuditEntity> {
-    const updated = await prisma.stockAudit.update({
+    const client = tx || prisma;
+    const updated = await client.stockAudit.update({
       where: { id },
       data: {
         status,

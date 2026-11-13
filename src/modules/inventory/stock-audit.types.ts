@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client';
+
 export interface StockAuditItemEntity {
   id: string;
   auditId: string;
@@ -53,7 +55,7 @@ export interface RecordAuditCountsInput {
 
 export interface IStockAuditRepository {
   createAudit(input: StartAuditInput): Promise<StockAuditEntity>;
-  findAuditById(id: string): Promise<StockAuditEntity | null>;
+  findAuditById(id: string, tx?: Prisma.TransactionClient): Promise<StockAuditEntity | null>;
   listAudits(warehouseId?: string): Promise<StockAuditEntity[]>;
   upsertAuditItem(data: {
     auditId: string;
@@ -68,5 +70,6 @@ export interface IStockAuditRepository {
     status: string,
     discrepanciesFound?: number,
     completedAt?: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<StockAuditEntity>;
 }
