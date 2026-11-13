@@ -94,12 +94,12 @@ export class InventoryService {
   /**
    * Receive inbound stock (procurement / purchase orders)
    */
-  async receiveStock(input: ReceiveStockInput): Promise<StockOperationResult> {
+  async receiveStock(input: ReceiveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
     if (input.quantity <= 0) {
       throw AppError.badRequest('Received quantity must be greater than zero');
     }
 
-    const result = await this.repo.receiveStock(input);
+    const result = await this.repo.receiveStock(input, tx);
 
     if (input.actorId) {
       await this.auditSvc.record({
@@ -125,7 +125,7 @@ export class InventoryService {
   /**
    * Adjust stock level (positive or negative with required reason and actor)
    */
-  async adjustStock(input: AdjustStockInput): Promise<StockOperationResult> {
+  async adjustStock(input: AdjustStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
     if (!input.reason || input.reason.trim().length < 3) {
       throw AppError.badRequest('Adjustment reason is required (min 3 characters)');
     }
@@ -136,7 +136,7 @@ export class InventoryService {
       throw AppError.badRequest('Adjustment quantity cannot be zero');
     }
 
-    const result = await this.repo.adjustStock(input);
+    const result = await this.repo.adjustStock(input, tx);
 
     await this.auditSvc.record({
       actorId: input.actorId,

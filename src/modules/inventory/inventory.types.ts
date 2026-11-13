@@ -208,8 +208,8 @@ export interface IInventoryRepository {
     referenceId: string,
     action: string,
   ): Promise<StockMovementEntity | null>;
-  receiveStock(input: ReceiveStockInput): Promise<StockOperationResult>;
-  adjustStock(input: AdjustStockInput): Promise<StockOperationResult>;
+  receiveStock(input: ReceiveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
+  adjustStock(input: AdjustStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
   reserveStock(input: ReserveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
   releaseReservation(input: ReleaseReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;
   commitReservation(input: CommitReservationInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult>;

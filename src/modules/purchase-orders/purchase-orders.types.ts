@@ -1,4 +1,4 @@
-import type { PurchaseOrderStatus } from '@prisma/client';
+import type { Prisma, PurchaseOrderStatus } from '@prisma/client';
 
 export interface PurchaseOrderItemEntity {
   id: string;
@@ -84,7 +84,7 @@ export interface IPurchaseOrdersRepository {
   listPurchaseOrders(
     filter: PurchaseOrderFilterQuery,
   ): Promise<{ items: PurchaseOrderEntity[]; total: number }>;
-  findPurchaseOrderById(id: string): Promise<PurchaseOrderEntity | null>;
+  findPurchaseOrderById(id: string, tx?: Prisma.TransactionClient): Promise<PurchaseOrderEntity | null>;
   findPurchaseOrderByPoNumber(poNumber: string): Promise<PurchaseOrderEntity | null>;
   createPurchaseOrder(data: {
     poNumber: string;
@@ -100,9 +100,11 @@ export interface IPurchaseOrdersRepository {
     id: string,
     status: PurchaseOrderStatus,
     extraData?: { orderedAt?: Date; receivedAt?: Date },
+    tx?: Prisma.TransactionClient,
   ): Promise<PurchaseOrderEntity>;
   updateReceivedQuantity(
     itemId: string,
     receivedQuantity: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<PurchaseOrderItemEntity>;
 }

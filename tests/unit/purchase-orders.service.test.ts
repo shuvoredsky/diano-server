@@ -105,6 +105,12 @@ describe('PurchaseOrdersService (Unit Tests: State Machine & Receiving)', () => 
     } as unknown as ISuppliersRepository;
 
     vi.spyOn(prisma.productVariant, 'update').mockResolvedValue({} as never);
+    vi.spyOn(prisma, '$transaction').mockImplementation(((callback: (tx: unknown) => Promise<unknown>) =>
+      callback({
+        ...prisma,
+        $queryRaw: vi.fn().mockResolvedValue([{ id: 'po-1' }]),
+      })) as never,
+    );
 
     service = new PurchaseOrdersService(mockRepo, mockInvService, mockAudit, mockSuppliersRepo);
   });
@@ -220,6 +226,7 @@ describe('PurchaseOrdersService (Unit Tests: State Machine & Receiving)', () => 
           referenceType: 'PURCHASE_ORDER',
           referenceId: 'PO-20261101-ABCD',
         }),
+        expect.anything(),
       );
 
       // Cost price updated in DB
@@ -234,6 +241,7 @@ describe('PurchaseOrdersService (Unit Tests: State Machine & Receiving)', () => 
       expect(mockRepo.updateStatus).toHaveBeenCalledWith(
         'po-1',
         PurchaseOrderStatus.PARTIALLY_RECEIVED,
+        expect.anything(),
         expect.anything(),
       );
       expect(result.status).toBe(PurchaseOrderStatus.PARTIALLY_RECEIVED);
@@ -252,6 +260,7 @@ describe('PurchaseOrdersService (Unit Tests: State Machine & Receiving)', () => 
         'po-1',
         PurchaseOrderStatus.RECEIVED,
         expect.objectContaining({ receivedAt: expect.any(Date) }),
+        expect.anything(),
       );
       expect(result.status).toBe(PurchaseOrderStatus.RECEIVED);
     });

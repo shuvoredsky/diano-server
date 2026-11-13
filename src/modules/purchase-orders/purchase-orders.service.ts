@@ -209,122 +209,168 @@ export class PurchaseOrdersService {
     dto: ReceivePurchaseOrderDto,
     actor?: { userId: string; email?: string },
   ): Promise<PurchaseOrderEntity> {
-    const po = await this.getPurchaseOrderById(id);
-
-    if (
-      po.status !== PurchaseOrderStatus.ORDERED &&
-      po.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED
-    ) {
-      throw AppError.badRequest(
-        `Cannot receive goods against purchase order in status '${po.status}'. Must be ORDERED or PARTIALLY_RECEIVED.`,
-      );
-    }
-
-    if (!po.warehouseId) {
-      throw AppError.badRequest('Purchase order does not have an assigned destination warehouse');
-    }
-
     if (!dto.items || dto.items.length === 0) {
       throw AppError.badRequest('At least one item must be received');
     }
 
-    const poItemsMap = new Map(po.items?.map(item => [item.variantId, item]));
-
-    // Step 1: Pre-validation of all incoming items (Over-receive block)
     for (const incoming of dto.items) {
       if (incoming.quantity <= 0) {
         throw AppError.badRequest('Receive quantity must be greater than zero');
       }
-
-      const poItem = poItemsMap.get(incoming.variantId);
-      if (!poItem) {
-        throw AppError.badRequest(
-          `Variant '${incoming.variantId}' is not part of purchase order '${po.poNumber}'`,
-        );
-      }
-
-      const remainingAllowed = poItem.orderedQuantity - poItem.receivedQuantity;
-      if (incoming.quantity > remainingAllowed) {
-        throw AppError.badRequest(
-          `Cannot receive ${incoming.quantity} units for variant '${poItem.variant?.sku || incoming.variantId}'. Remaining unreceived quantity is ${remainingAllowed}. Over-receiving is blocked.`,
-        );
-      }
     }
 
-    // Step 2: Process each received item
-    for (const incoming of dto.items) {
-      const poItem = poItemsMap.get(incoming.variantId)!;
+    const { updatedPo, costPriceAuditEvents, poNumber, nextStatus, allFullyReceived } =
+      await prisma.$transaction(
+        async tx => {
+          // Row lock the PurchaseOrder to serialize concurrent receive calls
+          await tx.$queryRaw`SELECT id FROM "PurchaseOrder" WHERE id = ${id} FOR UPDATE`;
 
-      // 2a. Atomic stock receive in inventory
-      const receiveResult = await this.invService.receiveStock({
-        variantId: incoming.variantId,
-        warehouseId: po.warehouseId,
-        quantity: incoming.quantity,
-        referenceType: 'PURCHASE_ORDER',
-        referenceId: po.poNumber,
-        reason: dto.notes || `Goods receipt against ${po.poNumber}`,
-        actorId: actor?.userId,
-      });
+          // Re-fetch fresh PO state within the transaction
+          const po = await this.repo.findPurchaseOrderById(id, tx);
+          if (!po) {
+            throw AppError.notFound(`Purchase order '${id}' not found`);
+          }
 
-      // 2b. Weighted average cost recalculation
-      const currentOnHandPrior = Math.max(0, receiveResult.inventory.onHand - incoming.quantity);
-      const currentCostPrice = poItem.variant?.costPrice ?? 0;
-      const newCostPrice = calculateWeightedAverageCost(
-        currentOnHandPrior,
-        currentCostPrice,
-        incoming.quantity,
-        poItem.unitCost,
+          if (
+            po.status !== PurchaseOrderStatus.ORDERED &&
+            po.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED
+          ) {
+            throw AppError.badRequest(
+              `Cannot receive goods against purchase order in status '${po.status}'. Must be ORDERED or PARTIALLY_RECEIVED.`,
+            );
+          }
+
+          if (!po.warehouseId) {
+            throw AppError.badRequest('Purchase order does not have an assigned destination warehouse');
+          }
+
+          const poItemsMap = new Map(po.items?.map(item => [item.variantId, item]));
+
+          // Step 1: Pre-validation of all incoming items against fresh quantities (Over-receive block)
+          for (const incoming of dto.items) {
+            const poItem = poItemsMap.get(incoming.variantId);
+            if (!poItem) {
+              throw AppError.badRequest(
+                `Variant '${incoming.variantId}' is not part of purchase order '${po.poNumber}'`,
+              );
+            }
+
+            const remainingAllowed = poItem.orderedQuantity - poItem.receivedQuantity;
+            if (incoming.quantity > remainingAllowed) {
+              throw AppError.badRequest(
+                `Cannot receive ${incoming.quantity} units for variant '${poItem.variant?.sku || incoming.variantId}'. Remaining unreceived quantity is ${remainingAllowed}. Over-receiving is blocked.`,
+              );
+            }
+          }
+
+          const costPriceAuditEvents: Array<{
+            variantId: string;
+            poNumber: string;
+            oldCostPrice: number;
+            newCostPrice: number;
+            receivedQty: number;
+            unitCost: number;
+          }> = [];
+
+          // Step 2: Process each received item
+          for (const incoming of dto.items) {
+            const poItem = poItemsMap.get(incoming.variantId)!;
+
+            // 2a. Atomic stock receive in inventory via active tx
+            const receiveResult = await this.invService.receiveStock(
+              {
+                variantId: incoming.variantId,
+                warehouseId: po.warehouseId,
+                quantity: incoming.quantity,
+                referenceType: 'PURCHASE_ORDER',
+                referenceId: po.poNumber,
+                reason: dto.notes || `Goods receipt against ${po.poNumber}`,
+                actorId: actor?.userId,
+              },
+              tx,
+            );
+
+            // 2b. Weighted average cost recalculation
+            const currentOnHandPrior = Math.max(0, receiveResult.inventory.onHand - incoming.quantity);
+            const currentCostPrice = poItem.variant?.costPrice ?? 0;
+            const newCostPrice = calculateWeightedAverageCost(
+              currentOnHandPrior,
+              currentCostPrice,
+              incoming.quantity,
+              poItem.unitCost,
+            );
+
+            // Update variant's costPrice in DB
+            await tx.productVariant.update({
+              where: { id: incoming.variantId },
+              data: { costPrice: newCostPrice },
+            });
+
+            if (actor) {
+              costPriceAuditEvents.push({
+                variantId: incoming.variantId,
+                poNumber: po.poNumber,
+                oldCostPrice: currentCostPrice,
+                newCostPrice,
+                receivedQty: incoming.quantity,
+                unitCost: poItem.unitCost,
+              });
+            }
+
+            // 2c. Update PO item received quantity
+            const newReceivedQty = poItem.receivedQuantity + incoming.quantity;
+            await this.repo.updateReceivedQuantity(poItem.id, newReceivedQty, tx);
+            poItem.receivedQuantity = newReceivedQty;
+          }
+
+          // Step 3: Determine new PO status
+          let allFullyReceived = true;
+          for (const item of po.items ?? []) {
+            if (item.receivedQuantity < item.orderedQuantity) {
+              allFullyReceived = false;
+              break;
+            }
+          }
+
+          const nextStatus = allFullyReceived
+            ? PurchaseOrderStatus.RECEIVED
+            : PurchaseOrderStatus.PARTIALLY_RECEIVED;
+
+          const updatedPo = await this.repo.updateStatus(
+            id,
+            nextStatus,
+            {
+              receivedAt: allFullyReceived ? new Date() : undefined,
+            },
+            tx,
+          );
+
+          return {
+            updatedPo,
+            costPriceAuditEvents,
+            poNumber: po.poNumber,
+            nextStatus,
+            allFullyReceived,
+          };
+        },
+        {
+          maxWait: 10000,
+          timeout: 25000,
+        },
       );
 
-      // Update variant's costPrice in DB
-      await prisma.productVariant.update({
-        where: { id: incoming.variantId },
-        data: { costPrice: newCostPrice },
-      });
-
-      // Audit log costPrice update
-      if (actor) {
+    if (actor) {
+      for (const event of costPriceAuditEvents) {
         await this.auditSvc.record({
           actorId: actor.userId,
           actorType: 'USER',
           action: 'COST_PRICE_UPDATED',
           targetType: 'PRODUCT_VARIANT',
-          targetId: incoming.variantId,
-          metadata: {
-            variantId: incoming.variantId,
-            poNumber: po.poNumber,
-            oldCostPrice: currentCostPrice,
-            newCostPrice,
-            receivedQty: incoming.quantity,
-            unitCost: poItem.unitCost,
-          },
+          targetId: event.variantId,
+          metadata: event,
         });
       }
 
-      // 2c. Update PO item received quantity
-      const newReceivedQty = poItem.receivedQuantity + incoming.quantity;
-      await this.repo.updateReceivedQuantity(poItem.id, newReceivedQty);
-      poItem.receivedQuantity = newReceivedQty;
-    }
-
-    // Step 3: Determine new PO status
-    let allFullyReceived = true;
-    for (const item of po.items ?? []) {
-      if (item.receivedQuantity < item.orderedQuantity) {
-        allFullyReceived = false;
-        break;
-      }
-    }
-
-    const nextStatus = allFullyReceived
-      ? PurchaseOrderStatus.RECEIVED
-      : PurchaseOrderStatus.PARTIALLY_RECEIVED;
-
-    const updatedPo = await this.repo.updateStatus(id, nextStatus, {
-      receivedAt: allFullyReceived ? new Date() : undefined,
-    });
-
-    if (actor) {
       await this.auditSvc.record({
         actorId: actor.userId,
         actorType: 'USER',
@@ -332,7 +378,7 @@ export class PurchaseOrdersService {
         targetType: 'PURCHASE_ORDER',
         targetId: id,
         metadata: {
-          poNumber: po.poNumber,
+          poNumber,
           status: nextStatus,
           receivedItemsCount: dto.items.length,
           allFullyReceived,

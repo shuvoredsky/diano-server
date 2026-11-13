@@ -155,8 +155,12 @@ export class PurchaseOrdersRepository implements IPurchaseOrdersRepository {
     };
   }
 
-  async findPurchaseOrderById(id: string): Promise<PurchaseOrderEntity | null> {
-    const order = await prisma.purchaseOrder.findUnique({
+  async findPurchaseOrderById(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PurchaseOrderEntity | null> {
+    const client = tx || prisma;
+    const order = await client.purchaseOrder.findUnique({
       where: { id },
       include: {
         supplier: {
@@ -254,8 +258,10 @@ export class PurchaseOrdersRepository implements IPurchaseOrdersRepository {
     id: string,
     status: PurchaseOrderStatus,
     extraData?: { orderedAt?: Date; receivedAt?: Date },
+    tx?: Prisma.TransactionClient,
   ): Promise<PurchaseOrderEntity> {
-    const updated = await prisma.purchaseOrder.update({
+    const client = tx || prisma;
+    const updated = await client.purchaseOrder.update({
       where: { id },
       data: {
         status,
@@ -285,8 +291,10 @@ export class PurchaseOrdersRepository implements IPurchaseOrdersRepository {
   async updateReceivedQuantity(
     itemId: string,
     receivedQuantity: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<PurchaseOrderItemEntity> {
-    const updated = await prisma.purchaseOrderItem.update({
+    const client = tx || prisma;
+    const updated = await client.purchaseOrderItem.update({
       where: { id: itemId },
       data: { receivedQuantity },
       include: {

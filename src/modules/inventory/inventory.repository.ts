@@ -337,9 +337,9 @@ export class PrismaInventoryRepository implements IInventoryRepository {
     };
   }
 
-  async receiveStock(input: ReceiveStockInput): Promise<StockOperationResult> {
-    return prisma.$transaction(async tx => {
-      return this.executeAtomicStockChange(tx, {
+  async receiveStock(input: ReceiveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
+    const run = async (activeTx: Prisma.TransactionClient) => {
+      return this.executeAtomicStockChange(activeTx, {
         variantId: input.variantId,
         warehouseId: input.warehouseId,
         action: 'RECEIVE',
@@ -350,12 +350,17 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId,
         actorId: input.actorId,
       });
-    }, TX_OPTIONS);
+    };
+
+    if (tx) {
+      return run(tx);
+    }
+    return prisma.$transaction(run, TX_OPTIONS);
   }
 
-  async adjustStock(input: AdjustStockInput): Promise<StockOperationResult> {
-    return prisma.$transaction(async tx => {
-      return this.executeAtomicStockChange(tx, {
+  async adjustStock(input: AdjustStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
+    const run = async (activeTx: Prisma.TransactionClient) => {
+      return this.executeAtomicStockChange(activeTx, {
         variantId: input.variantId,
         warehouseId: input.warehouseId,
         action: 'ADJUST',
@@ -366,7 +371,12 @@ export class PrismaInventoryRepository implements IInventoryRepository {
         referenceId: input.referenceId ?? `ADJ-${Date.now()}`,
         actorId: input.actorId,
       });
-    }, TX_OPTIONS);
+    };
+
+    if (tx) {
+      return run(tx);
+    }
+    return prisma.$transaction(run, TX_OPTIONS);
   }
 
   async reserveStock(input: ReserveStockInput, tx?: Prisma.TransactionClient): Promise<StockOperationResult> {
