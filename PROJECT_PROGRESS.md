@@ -458,5 +458,30 @@ The following items are implemented according to Prisma models and interfaces, b
   3. **Database Backup & Recovery Tool (`scripts/db-backup.ts`, `scripts/db-restore.ts`):** Native PostgreSQL custom-format archive (`pg_dump -Fc`) and restore (`pg_restore`) with production refusal guard and zero credential leakage, verified in `docs/BACKUP_RESTORE_PROOF.md`.
   4. **Scheduled Job Automation:** Documented cron-job.org configuration for all 8 internal jobs to maintain system integrity and prevent Render sleep.
 
+---
+
+## Post-M16 Hardening: Inventory Race & Atomicity Fixes (BG-22, BG-23)
+- **Status:** Completed & Verified (Live Neon PostgreSQL Integration Tests Passing)
+- **Key Fixes & Deliverables:**
+  1. **Atomic Purchase Order Receiving (`purchase-orders.service.ts`):**
+     - Single `prisma.$transaction` wrapping entire goods receipt flow.
+     - Row locking via `SELECT id FROM "PurchaseOrder" WHERE id = ${id} FOR UPDATE` serializing concurrent requests.
+     - Re-verification of order status (`ORDERED` / `PARTIALLY_RECEIVED`) and per-item remaining quantities within the transaction, completely blocking over-receiving and duplicate receipts.
+     - Atomic stock increments and double-entry ledger movements (`StockMovement`) via `inventoryService.receiveStock(..., tx)`.
+     - Atomic weighted average cost recomputation and status updates. Mid-way failure guarantees full rollback of all lines.
+  2. **Atomic Stock Audit Approval (`stock-audit.service.ts`):**
+     - Single `prisma.$transaction` wrapping reconciliation adjustments.
+     - Row locking via `SELECT id FROM "StockAudit" WHERE id = ${id} FOR UPDATE` preventing simultaneous double-approvals.
+     - Status re-check ensuring strictly `IN_PROGRESS` audits can be approved; second concurrent approve cleanly fails with 400 Bad Request.
+     - Atomic variance adjustments recorded directly to ledger via `inventoryService.adjustStock(..., tx)` and audit marked `APPROVED`.
+  3. **Concurrency & Rollback Integration Suite (`tests/integration/inventory-concurrency.integration.test.ts`):**
+     - 5/5 real DB integration scenarios passing against Neon PostgreSQL:
+       1. Concurrent PO receive serialization (Promise.all): exactly one succeeds, stock increases once, no over-receipt.
+       2. Mid-way failure rollback: simulated failure on line 2 rolls back line 1 stock and ledger entries.
+       3. Sequential partial receiving: 5 units then 5 units smoothly transitions to `RECEIVED`.
+       4. Terminal status guard: receives rejected on `RECEIVED` or `CANCELLED` POs (400 Bad Request).
+       5. Concurrent audit approve serialization: exactly one succeeds, duplicate approve rejected with 400, exactly one set of ledger adjustments created.
+
+
 
 

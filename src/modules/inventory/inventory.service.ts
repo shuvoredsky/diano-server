@@ -99,7 +99,7 @@ export class InventoryService {
       throw AppError.badRequest('Received quantity must be greater than zero');
     }
 
-    const result = await this.repo.receiveStock(input, tx);
+    const result = tx ? await this.repo.receiveStock(input, tx) : await this.repo.receiveStock(input);
 
     if (input.actorId) {
       await this.auditSvc.record({
@@ -136,7 +136,7 @@ export class InventoryService {
       throw AppError.badRequest('Adjustment quantity cannot be zero');
     }
 
-    const result = await this.repo.adjustStock(input, tx);
+    const result = tx ? await this.repo.adjustStock(input, tx) : await this.repo.adjustStock(input);
 
     await this.auditSvc.record({
       actorId: input.actorId,
