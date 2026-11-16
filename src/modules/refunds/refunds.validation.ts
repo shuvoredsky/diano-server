@@ -17,6 +17,7 @@ export const executeRefundSchema = z.object({
   returnRequestId: z.string().optional(),
   refundShipping: z.boolean().optional(),
   manualReference: z.string().max(100).optional(),
+  status: z.enum(['PENDING', 'COMPLETED']).optional(),
 });
 
 export const refundFilterSchema = z.object({

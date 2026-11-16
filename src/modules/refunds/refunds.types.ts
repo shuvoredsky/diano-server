@@ -54,6 +54,7 @@ export interface ExecuteRefundInput {
   refundShipping?: boolean;
   manualReference?: string;
   idempotencyKey?: string;
+  status?: 'PENDING' | 'COMPLETED';
 }
 
 export interface RefundFilter {

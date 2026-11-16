@@ -618,6 +618,27 @@ export class PaymentsService {
     const newPaymentStatus = isFullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
 
     const refund = await prisma.$transaction(async tx => {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "Payment" WHERE id = ${payment.id} FOR UPDATE
+      `;
+
+      // Re-read prior refunds under lock
+      const priorRefunds = await tx.refund.findMany({
+        where: {
+          paymentId: payment.id,
+          status: { in: ['COMPLETED', 'PROCESSING', 'APPROVED'] },
+        },
+        select: { amount: true },
+      });
+
+      const lockedTotalRefunded = priorRefunds.reduce((acc, r) => acc + Number(r.amount), 0);
+      const lockedRefundableAmount = paymentAmount - lockedTotalRefunded;
+      if (dto.amount > lockedRefundableAmount) {
+        throw AppError.badRequest(
+          `Requested refund amount (${dto.amount} BDT) exceeds refundable balance (${lockedRefundableAmount.toFixed(2)} BDT)`,
+        );
+      }
+
       const createdRefund = await tx.refund.create({
         data: {
           paymentId: payment.id,
