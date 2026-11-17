@@ -14,6 +14,8 @@ import type {
   CouponItemContext,
   FlashSaleEntity,
   CreateFlashSaleInput,
+  UpdateFlashSaleInput,
+  FlashSaleFilter,
 } from './coupons.types';
 
 export class CouponsService {
@@ -302,11 +304,52 @@ export class CouponsService {
     return this.repo.listActiveFlashSales();
   }
 
+  async listAdminFlashSales(filter: FlashSaleFilter): Promise<{ items: FlashSaleEntity[]; total: number }> {
+    return this.repo.listAdminFlashSales(filter);
+  }
+
+  async getFlashSaleById(id: string): Promise<FlashSaleEntity> {
+    const sale = await this.repo.findFlashSaleById(id);
+    if (!sale) throw AppError.notFound(`Flash sale '${id}' not found`);
+    return sale;
+  }
+
   async createFlashSale(
     input: CreateFlashSaleInput,
     actor?: { id: string },
   ): Promise<FlashSaleEntity> {
-    const sale = await this.repo.createFlashSale(input);
+    const startsAt = new Date(input.startsAt);
+    const endsAt = new Date(input.endsAt);
+    if (startsAt >= endsAt) {
+      throw AppError.badRequest('endsAt must be after startsAt');
+    }
+
+    const sale = await prisma.$transaction(async tx => {
+      // Validate overlap/conflict rules inside transaction if active
+      if (input.isActive ?? true) {
+        const variantIds = input.items.map(i => i.variantId);
+        const conflicts = await tx.flashSaleItem.findMany({
+          where: {
+            variantId: { in: variantIds },
+            flashSale: {
+              isActive: true,
+              startsAt: { lt: endsAt },
+              endsAt: { gt: startsAt },
+            },
+          },
+          include: { flashSale: { select: { title: true } } },
+        });
+
+        const conflict = conflicts[0];
+        if (conflict) {
+          throw AppError.badRequest(
+            `Variant '${conflict.variantId}' is already included in an overlapping active flash sale '${conflict.flashSale.title}'`,
+          );
+        }
+      }
+
+      return this.repo.createFlashSale(input, tx);
+    });
 
     await this.audit.record({
       actorId: actor?.id,
@@ -318,6 +361,154 @@ export class CouponsService {
     });
 
     return sale;
+  }
+
+  async updateFlashSale(
+    id: string,
+    input: UpdateFlashSaleInput,
+    actor?: { id: string },
+  ): Promise<FlashSaleEntity> {
+    const sale = await prisma.$transaction(async tx => {
+      const existing = await this.repo.findFlashSaleById(id, tx);
+      if (!existing) {
+        throw AppError.notFound(`Flash sale '${id}' not found`);
+      }
+
+      const startsAt = input.startsAt ? new Date(input.startsAt) : existing.startsAt;
+      const endsAt = input.endsAt ? new Date(input.endsAt) : existing.endsAt;
+      if (startsAt >= endsAt) {
+        throw AppError.badRequest('endsAt must be after startsAt');
+      }
+
+      // Resolve isActive status from action/status/isActive
+      let isActive: boolean;
+      if (
+        input.action === 'CANCEL' ||
+        input.action === 'END' ||
+        input.status === 'CANCELLED' ||
+        input.status === 'ENDED'
+      ) {
+        isActive = false;
+      } else if (input.action === 'ACTIVATE' || input.status === 'ACTIVE') {
+        isActive = true;
+      } else if (input.isActive !== undefined) {
+        isActive = input.isActive;
+      } else {
+        isActive = existing.isActive;
+      }
+
+      // Validate overlap conflicts inside transaction if active
+      if (isActive) {
+        const variantIds = input.items
+          ? input.items.map(i => i.variantId)
+          : (existing.items || []).map(i => i.variantId);
+
+        if (variantIds.length > 0) {
+          const conflicts = await tx.flashSaleItem.findMany({
+            where: {
+              variantId: { in: variantIds },
+              flashSaleId: { not: id },
+              flashSale: {
+                isActive: true,
+                startsAt: { lt: endsAt },
+                endsAt: { gt: startsAt },
+              },
+            },
+            include: { flashSale: { select: { title: true } } },
+          });
+
+          const conflict = conflicts[0];
+          if (conflict) {
+            throw AppError.badRequest(
+              `Variant '${conflict.variantId}' is already included in an overlapping active flash sale '${conflict.flashSale.title}'`,
+            );
+          }
+        }
+      }
+
+      const title = input.title ?? input.name ?? existing.title;
+      const description = input.description !== undefined ? input.description : existing.description;
+
+      const updated = await tx.flashSale.update({
+        where: { id },
+        data: {
+          title,
+          description,
+          startsAt,
+          endsAt,
+          isActive,
+          ...(input.items
+            ? {
+                items: {
+                  deleteMany: {},
+                  create: input.items.map(i => ({
+                    variantId: i.variantId,
+                    discountPrice: i.discountPrice.toString(),
+                    stockLimit: i.stockLimit,
+                    soldCount: 0,
+                  })),
+                },
+              }
+            : {}),
+        },
+        include: { items: true },
+      });
+
+      return this.repo.formatFlashSale(updated);
+    });
+
+    const isCancelAction =
+      input.action === 'CANCEL' ||
+      input.action === 'END' ||
+      input.status === 'CANCELLED' ||
+      input.status === 'ENDED' ||
+      input.isActive === false;
+
+    await this.audit.record({
+      actorId: actor?.id,
+      actorType: actor ? 'USER' : 'SYSTEM',
+      action: isCancelAction ? 'FLASH_SALE_CANCELLED' : 'FLASH_SALE_UPDATED',
+      targetType: 'FLASH_SALE',
+      targetId: sale.id,
+      metadata: {
+        title: sale.title,
+        isActive: sale.isActive,
+        startsAt: sale.startsAt,
+        endsAt: sale.endsAt,
+        action: input.action,
+      },
+    });
+
+    return sale;
+  }
+
+  async cancelFlashSale(id: string, actor?: { id: string }): Promise<FlashSaleEntity> {
+    return this.updateFlashSale(id, { action: 'CANCEL' }, actor);
+  }
+
+  async deleteFlashSale(id: string, actor?: { id: string }): Promise<void> {
+    await prisma.$transaction(async tx => {
+      const existing = await this.repo.findFlashSaleById(id, tx);
+      if (!existing) {
+        throw AppError.notFound(`Flash sale '${id}' not found`);
+      }
+
+      if (existing.startsAt <= new Date()) {
+        throw AppError.badRequest(
+          'Cannot delete a flash sale that has already started. Cancel or end it instead.',
+        );
+      }
+
+      await this.repo.deleteFlashSale(id, tx);
+    });
+
+    await this.audit.record({
+      actorId: actor?.id,
+      actorType: actor ? 'USER' : 'SYSTEM',
+      action: 'FLASH_SALE_DELETED',
+      targetType: 'FLASH_SALE',
+      targetId: id,
+    });
   }
 }
 

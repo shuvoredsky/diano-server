@@ -78,3 +78,42 @@ export const createFlashSaleSchema = z.object({
   message: 'endsAt must be after startsAt',
   path: ['endsAt'],
 });
+
+export const updateFlashSaleSchema = z.object({
+  title: z.string().min(3).optional(),
+  name: z.string().min(3).optional(),
+  description: z.string().nullable().optional(),
+  startsAt: z.coerce.date().optional(),
+  endsAt: z.coerce.date().optional(),
+  isActive: z.boolean().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'CANCELLED', 'ENDED']).optional(),
+  action: z.enum(['CANCEL', 'END', 'ACTIVATE', 'DEACTIVATE']).optional(),
+  items: z.array(
+    z.object({
+      variantId: z.string().min(1, 'Variant ID is required'),
+      discountPrice: z.union([z.number().positive(), z.string().regex(/^\d+(\.\d{1,2})?$/)]),
+      stockLimit: z.number().int().positive(),
+    }),
+  ).optional(),
+}).refine(
+  data => {
+    if (data.startsAt && data.endsAt) {
+      return data.startsAt < data.endsAt;
+    }
+    return true;
+  },
+  {
+    message: 'endsAt must be after startsAt',
+    path: ['endsAt'],
+  },
+);
+
+export const flashSaleFilterSchema = z.object({
+  search: z.string().optional(),
+  isActive: z
+    .enum(['true', 'false'])
+    .transform(v => v === 'true')
+    .optional(),
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+});

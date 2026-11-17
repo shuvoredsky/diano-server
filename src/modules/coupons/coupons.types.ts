@@ -126,3 +126,26 @@ export interface CreateFlashSaleInput {
     stockLimit: number;
   }>;
 }
+
+export interface UpdateFlashSaleInput {
+  title?: string;
+  name?: string;
+  description?: string | null;
+  startsAt?: Date | string;
+  endsAt?: Date | string;
+  isActive?: boolean;
+  status?: 'ACTIVE' | 'INACTIVE' | 'CANCELLED' | 'ENDED';
+  action?: 'CANCEL' | 'END' | 'ACTIVATE' | 'DEACTIVATE';
+  items?: Array<{
+    variantId: string;
+    discountPrice: string | number;
+    stockLimit: number;
+  }>;
+}
+
+export interface FlashSaleFilter {
+  search?: string;
+  isActive?: boolean;
+  page?: number;
+  limit?: number;
+}

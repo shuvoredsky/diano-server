@@ -7,6 +7,7 @@ import type {
   CouponFilter,
   FlashSaleEntity,
   CreateFlashSaleInput,
+  FlashSaleFilter,
 } from './coupons.types';
 
 export class CouponsRepository {
@@ -208,21 +209,25 @@ export class CouponsRepository {
   // FLASH SALES
   // ==========================================
 
-  async listActiveFlashSales(): Promise<FlashSaleEntity[]> {
-    const now = new Date();
-    const rows = await prisma.flashSale.findMany({
-      where: {
-        isActive: true,
-        startsAt: { lte: now },
-        endsAt: { gte: now },
-      },
-      include: {
-        items: true,
-      },
-      orderBy: { endsAt: 'asc' },
-    });
-
-    return rows.map(r => ({
+  formatFlashSale(r: {
+    id: string;
+    title: string;
+    description: string | null;
+    startsAt: Date;
+    endsAt: Date;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    items: Array<{
+      id: string;
+      flashSaleId: string;
+      variantId: string;
+      discountPrice: { toString(): string };
+      stockLimit: number;
+      soldCount: number;
+    }>;
+  }): FlashSaleEntity {
+    return {
       id: r.id,
       title: r.title,
       description: r.description,
@@ -239,11 +244,75 @@ export class CouponsRepository {
         stockLimit: i.stockLimit,
         soldCount: i.soldCount,
       })),
-    }));
+    };
   }
 
-  async createFlashSale(input: CreateFlashSaleInput): Promise<FlashSaleEntity> {
-    const row = await prisma.flashSale.create({
+  async listActiveFlashSales(): Promise<FlashSaleEntity[]> {
+    const now = new Date();
+    const rows = await prisma.flashSale.findMany({
+      where: {
+        isActive: true,
+        startsAt: { lte: now },
+        endsAt: { gte: now },
+      },
+      include: {
+        items: true,
+      },
+      orderBy: { endsAt: 'asc' },
+    });
+
+    return rows.map(r => this.formatFlashSale(r));
+  }
+
+  async listAdminFlashSales(filter: FlashSaleFilter): Promise<{ items: FlashSaleEntity[]; total: number }> {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.FlashSaleWhereInput = {};
+    if (filter.isActive !== undefined) {
+      where.isActive = filter.isActive;
+    }
+    if (filter.search) {
+      where.OR = [
+        { title: { contains: filter.search, mode: 'insensitive' } },
+        { description: { contains: filter.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.flashSale.findMany({
+        where,
+        include: { items: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.flashSale.count({ where }),
+    ]);
+
+    return {
+      items: rows.map(r => this.formatFlashSale(r)),
+      total,
+    };
+  }
+
+  async findFlashSaleById(
+    id: string,
+    tx: Prisma.TransactionClient = prisma,
+  ): Promise<FlashSaleEntity | null> {
+    const row = await tx.flashSale.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    return row ? this.formatFlashSale(row) : null;
+  }
+
+  async createFlashSale(
+    input: CreateFlashSaleInput,
+    tx: Prisma.TransactionClient = prisma,
+  ): Promise<FlashSaleEntity> {
+    const row = await tx.flashSale.create({
       data: {
         title: input.title,
         description: input.description ?? null,
@@ -262,24 +331,16 @@ export class CouponsRepository {
       include: { items: true },
     });
 
-    return {
-      id: row.id,
-      title: row.title,
-      description: row.description,
-      startsAt: row.startsAt,
-      endsAt: row.endsAt,
-      isActive: row.isActive,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      items: row.items.map(i => ({
-        id: i.id,
-        flashSaleId: i.flashSaleId,
-        variantId: i.variantId,
-        discountPrice: i.discountPrice.toString(),
-        stockLimit: i.stockLimit,
-        soldCount: i.soldCount,
-      })),
-    };
+    return this.formatFlashSale(row);
+  }
+
+  async deleteFlashSale(
+    id: string,
+    tx: Prisma.TransactionClient = prisma,
+  ): Promise<void> {
+    await tx.flashSale.delete({
+      where: { id },
+    });
   }
 }
 

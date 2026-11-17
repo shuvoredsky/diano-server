@@ -816,6 +816,20 @@ export const extendedSwaggerPaths: Record<string, Record<string, unknown>> = {
     },
   },
   '/api/v1/admin/flash-sales': {
+    get: {
+      tags: ['Admin Coupons'],
+      summary: 'List all flash sales with filtering and pagination',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        { name: 'search', in: 'query', schema: { type: 'string' } },
+        { name: 'isActive', in: 'query', schema: { type: 'string', enum: ['true', 'false'] } },
+      ],
+      responses: {
+        200: { description: 'Admin flash sales list' },
+      },
+    },
     post: {
       tags: ['Admin Coupons'],
       summary: 'Create time-limited flash sale promotion with variant price overrides',
@@ -826,19 +840,22 @@ export const extendedSwaggerPaths: Record<string, Record<string, unknown>> = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['title', 'startDate', 'endDate', 'items'],
+              required: ['title', 'startsAt', 'endsAt', 'items'],
               properties: {
                 title: { type: 'string' },
-                startDate: { type: 'string', format: 'date-time' },
-                endDate: { type: 'string', format: 'date-time' },
+                description: { type: 'string' },
+                startsAt: { type: 'string', format: 'date-time' },
+                endsAt: { type: 'string', format: 'date-time' },
+                isActive: { type: 'boolean' },
                 items: {
                   type: 'array',
                   items: {
                     type: 'object',
-                    required: ['variantId', 'salePrice'],
+                    required: ['variantId', 'discountPrice', 'stockLimit'],
                     properties: {
                       variantId: { type: 'string' },
-                      salePrice: { type: 'string' },
+                      discountPrice: { type: 'string' },
+                      stockLimit: { type: 'integer' },
                     },
                   },
                 },
@@ -849,6 +866,92 @@ export const extendedSwaggerPaths: Record<string, Record<string, unknown>> = {
       },
       responses: {
         201: { description: 'Flash sale created' },
+      },
+    },
+  },
+  '/api/v1/admin/flash-sales/{id}': {
+    get: {
+      tags: ['Admin Coupons'],
+      summary: 'Get flash sale details by ID',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      responses: {
+        200: { description: 'Flash sale details' },
+        404: { description: 'Flash sale not found' },
+      },
+    },
+    patch: {
+      tags: ['Admin Coupons'],
+      summary: 'Update flash sale details, schedule, items, or status',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                name: { type: 'string' },
+                description: { type: 'string', nullable: true },
+                startsAt: { type: 'string', format: 'date-time' },
+                endsAt: { type: 'string', format: 'date-time' },
+                isActive: { type: 'boolean' },
+                status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'CANCELLED', 'ENDED'] },
+                action: { type: 'string', enum: ['CANCEL', 'END', 'ACTIVATE', 'DEACTIVATE'] },
+                items: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['variantId', 'discountPrice', 'stockLimit'],
+                    properties: {
+                      variantId: { type: 'string' },
+                      discountPrice: { type: 'string' },
+                      stockLimit: { type: 'integer' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'Flash sale updated' },
+        400: { description: 'Validation or overlap conflict' },
+        404: { description: 'Flash sale not found' },
+      },
+    },
+    delete: {
+      tags: ['Admin Coupons'],
+      summary: 'Delete flash sale (allowed only before campaign starts)',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      responses: {
+        200: { description: 'Flash sale deleted successfully' },
+        400: { description: 'Cannot delete started campaign' },
+        404: { description: 'Flash sale not found' },
+      },
+    },
+  },
+  '/api/v1/admin/flash-sales/{id}/cancel': {
+    post: {
+      tags: ['Admin Coupons'],
+      summary: 'Cancel or end active or scheduled flash sale',
+      security: [{ BearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      responses: {
+        200: { description: 'Flash sale cancelled successfully' },
+        404: { description: 'Flash sale not found' },
       },
     },
   },

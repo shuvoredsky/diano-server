@@ -41,10 +41,35 @@ adminCouponsRouter.delete(
 export const adminFlashSalesRouter = Router();
 
 adminFlashSalesRouter.use(authenticate);
+adminFlashSalesRouter.get(
+  '/',
+  requirePermission('coupon:read', 'coupon:manage'),
+  couponsController.listAdminFlashSales,
+);
+adminFlashSalesRouter.get(
+  '/:id',
+  requirePermission('coupon:read', 'coupon:manage'),
+  couponsController.getFlashSaleById,
+);
 adminFlashSalesRouter.post(
   '/',
   requirePermission('coupon:manage'),
   couponsController.createFlashSale,
+);
+adminFlashSalesRouter.patch(
+  '/:id',
+  requirePermission('coupon:manage'),
+  couponsController.updateFlashSale,
+);
+adminFlashSalesRouter.post(
+  '/:id/cancel',
+  requirePermission('coupon:manage'),
+  couponsController.cancelFlashSale,
+);
+adminFlashSalesRouter.delete(
+  '/:id',
+  requirePermission('coupon:manage'),
+  couponsController.deleteFlashSale,
 );
 
 export const publicFlashSalesRouter = Router();

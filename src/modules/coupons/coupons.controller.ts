@@ -8,6 +8,8 @@ import {
   couponFilterSchema,
   applyCouponSchema,
   createFlashSaleSchema,
+  updateFlashSaleSchema,
+  flashSaleFilterSchema,
 } from './coupons.validation';
 
 export class CouponsController {
@@ -149,6 +151,79 @@ export class CouponsController {
 
       const sale = await this.service.createFlashSale(parsed.data, { id: req.user.userId });
       ApiResponse.created(res, 'Flash sale created successfully', sale);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listAdminFlashSales = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = flashSaleFilterSchema.safeParse(req.query);
+      if (!parsed.success) {
+        throw AppError.badRequest('Invalid flash sale filter query', parsed.error.format());
+      }
+
+      const { items, total } = await this.service.listAdminFlashSales(parsed.data);
+      const page = parsed.data.page ?? 1;
+      const limit = parsed.data.limit ?? 20;
+      const totalPages = Math.ceil(total / limit) || 1;
+
+      ApiResponse.paginated(res, 'Admin flash sales retrieved successfully', items, {
+        page,
+        limit,
+        totalItems: total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getFlashSaleById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      const sale = await this.service.getFlashSaleById(id);
+      ApiResponse.success(res, 'Flash sale retrieved successfully', sale);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateFlashSale = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) throw AppError.unauthorized('Authentication required');
+      const id = req.params.id as string;
+      const parsed = updateFlashSaleSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw AppError.badRequest('Invalid flash sale update payload', parsed.error.format());
+      }
+
+      const sale = await this.service.updateFlashSale(id, parsed.data, { id: req.user.userId });
+      ApiResponse.success(res, 'Flash sale updated successfully', sale);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  cancelFlashSale = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) throw AppError.unauthorized('Authentication required');
+      const id = req.params.id as string;
+      const sale = await this.service.cancelFlashSale(id, { id: req.user.userId });
+      ApiResponse.success(res, 'Flash sale cancelled successfully', sale);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deleteFlashSale = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) throw AppError.unauthorized('Authentication required');
+      const id = req.params.id as string;
+      await this.service.deleteFlashSale(id, { id: req.user.userId });
+      ApiResponse.success(res, 'Flash sale deleted successfully');
     } catch (error) {
       next(error);
     }
