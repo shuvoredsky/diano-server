@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { prisma } from '@/config/database';
 import {
   isAllowedTransition,
   assertValidTransition,
@@ -308,6 +309,52 @@ describe('Orders & Invoice Unit Tests', () => {
       expect(result.filename).toBe('INV-2611-00001.pdf');
       expect(Buffer.isBuffer(result.buffer)).toBe(true);
       expect(result.buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
+    });
+  });
+
+  // ============================================================================
+  // 6. SHIPPED TRANSITION ENFORCEMENT (BG-26)
+  // ============================================================================
+  describe('SHIPPED Transition Enforcement (BG-26)', () => {
+    it('requires an existing shipment row with courier name before transitioning to SHIPPED', async () => {
+      const mockOrder = {
+        id: 'ord-123',
+        status: 'PACKED',
+        orderNumber: 'DN-261101-00001',
+        items: [],
+      };
+
+      const mockRepo = {
+        findById: vi.fn().mockResolvedValue(mockOrder),
+      };
+
+      const mockTx = {
+        shipment: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
+      };
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: unknown) => {
+        return (callback as (tx: unknown) => Promise<unknown>)(mockTx);
+      });
+
+      const svc = new OrdersService(
+        mockRepo as unknown as OrdersRepository,
+        {} as unknown as IAuditService,
+        {} as unknown as InventoryService,
+        {} as unknown as InvoiceService,
+      );
+
+      // Without shipment: throws 400
+      await expect(
+        svc.updateOrderStatus('ord-123', { status: 'SHIPPED' }, { id: 'admin-1', permissions: ['*'] }),
+      ).rejects.toThrow(/Cannot transition order to SHIPPED without an existing shipment record/);
+
+      // With shipment but whitespace courierName: throws 400
+      mockTx.shipment.findUnique.mockResolvedValue({ id: 'ship-1', courierName: '   ' });
+      await expect(
+        svc.updateOrderStatus('ord-123', { status: 'SHIPPED' }, { id: 'admin-1', permissions: ['*'] }),
+      ).rejects.toThrow(/Cannot transition order to SHIPPED without an existing shipment record/);
     });
   });
 });

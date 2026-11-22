@@ -249,6 +249,18 @@ export class OrdersService {
 
     // Execute state transition and inventory side-effects in a single transaction
     const updated = await prisma.$transaction(async tx => {
+      // Enforce shipment requirement before transitioning to SHIPPED (BG-26)
+      if (input.status === 'SHIPPED') {
+        const shipment = await tx.shipment.findUnique({
+          where: { orderId },
+        });
+        if (!shipment || !shipment.courierName || shipment.courierName.trim() === '') {
+          throw AppError.badRequest(
+            'Cannot transition order to SHIPPED without an existing shipment record and assigned courier name',
+          );
+        }
+      }
+
       // Find central warehouse for stock operations
       const defaultWarehouse = await tx.warehouse.findFirst({
         where: { isDefault: true, isActive: true },
