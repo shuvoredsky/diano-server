@@ -349,7 +349,7 @@ export class CouponsService {
       }
 
       return this.repo.createFlashSale(input, tx);
-    });
+    }, { timeout: 25000, maxWait: 15000 });
 
     await this.audit.record({
       actorId: actor?.id,
@@ -455,7 +455,7 @@ export class CouponsService {
       });
 
       return this.repo.formatFlashSale(updated);
-    });
+    }, { timeout: 25000, maxWait: 15000 });
 
     const isCancelAction =
       input.action === 'CANCEL' ||
@@ -500,7 +500,7 @@ export class CouponsService {
       }
 
       await this.repo.deleteFlashSale(id, tx);
-    });
+    }, { timeout: 25000, maxWait: 15000 });
 
     await this.audit.record({
       actorId: actor?.id,

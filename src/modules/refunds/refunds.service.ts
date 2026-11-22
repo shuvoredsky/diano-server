@@ -87,7 +87,8 @@ export class RefundsService {
     }
 
     // 5. Atomic transaction with pessimistic row locking and re-read
-    const refund = await prisma.$transaction(async tx => {
+    const refund = await prisma.$transaction(
+      async tx => {
       // Lock Order row to serialize concurrent refund requests on the same order
       await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM "Order" WHERE id = ${order.id} FOR UPDATE
@@ -265,7 +266,7 @@ export class RefundsService {
       }
 
       return this.repo.formatRefund(createdRefund);
-    });
+    }, { timeout: 25000, maxWait: 15000 });
 
     await this.audit.record({
       actorId: actor?.id,

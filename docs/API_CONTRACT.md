@@ -173,4 +173,50 @@ To prevent duplicate financial transactions during network retries:
   - `GET /api/v1/admin/analytics/charts/:type` supports `shipment-status` (shipment status distribution) and `stock-by-subcategory` (grouped parent -> child category stock units) in addition to existing chart types.
   - Inventory valuation & stock KPIs (`totalProducts`, `totalStockUnits`, `stockValue`, `damaged`, `damageValue`, `netStockValue`) are served by `GET /api/v1/inventory/summary`.
 
+---
+
+## 11. Flash Sales Management (BG-06)
+- **Admin Endpoints:**
+  - `GET /api/v1/admin/flash-sales`: List all flash sales with pagination and optional `isActive` filter.
+  - `GET /api/v1/admin/flash-sales/:id`: Get detailed flash sale record with associated discounted product variants.
+  - `POST /api/v1/admin/flash-sales`: Create flash sale campaign. Overlap conflict checks validate inside transaction (cannot include the same variant in overlapping active sales).
+  - `PATCH /api/v1/admin/flash-sales/:id`: Update flash sale schedule (`startsAt`, `endsAt`), metadata (`title`, `description`), item variants, or status (`action: "ACTIVATE" | "CANCEL" | "END"`, `status: "ACTIVE" | "CANCELLED" | "ENDED"`, or boolean `isActive`).
+  - `POST /api/v1/admin/flash-sales/:id/cancel`: Deactivates an active flash sale immediately (`isActive = false`).
+  - `DELETE /api/v1/admin/flash-sales/:id`: Allowed ONLY if the flash sale has not yet started (`startsAt > now`). Deleting an ongoing or past flash sale returns `400 Bad Request` with instruction to cancel or end instead.
+
+---
+
+## 12. Order Fulfillment & Shipment Tracking Prerequisite (BG-26)
+- **Status Transition Guard (`PATCH /api/v1/admin/orders/:id/status`):**
+  - Attempting to transition an order's status to `SHIPPED` strictly requires an existing `Shipment` record in the database with a valid `courierName`.
+  - If no shipment row exists, or if courier information is missing, the request fails immediately with `400 Bad Request`: `"Cannot transition order to SHIPPED without an existing shipment record. Assign a courier and generate tracking first."`.
+  - After dispatch/tracking record is created (`POST /api/v1/admin/orders/:id/shipments`), transitioning to `SHIPPED` succeeds, updates `shippedAt` timestamp, and records timeline and audit history.
+
+---
+
+## 13. Atomic Refunds Engine & Offline Settlement (BG-27)
+- **Admin Refund Execution (`POST /api/v1/admin/refunds/orders/:id/refunds`):**
+  - **Pessimistic Row Locking:** Acquires database row locks on `Order` and `Payment` records (`FOR UPDATE`) inside an isolated transaction.
+  - **Atomic Balance Capping:** Re-reads all prior approved/completed refunds under lock. Rejects any refund request where `requestedAmount > remainingRefundableBalance` with `400 Bad Request`.
+  - **Idempotency Guarantee:** Supports `Idempotency-Key` header and request body `idempotencyKey`. Replaying the same key safely returns the existing refund record without creating duplicate disbursements.
+  - **Gateway vs Manual Settlement:**
+    - **SSLCOMMERZ Online Payments:** When `bankTranId` is present and no `manualReference` is provided, backend calls real SSLCOMMERZ refund validator API (`sslcommerzGateway.initiateRefund`). Failed gateway responses roll back the transaction and return `502 Bad Gateway`.
+    - **Manual Offline Payouts:** If operator provides `manualReference` (e.g. bank slip, cash receipt, or BKASH transaction ID), the refund is recorded without calling the online gateway.
+    - **COD Refunds:** COD orders always process via manual settlement flow (`providerRefundId` set to `manualReference` or `MANUAL-COD-<timestamp>`).
+  - **Order & Payment Status Sync:** Status transitions to `REFUNDED` (if total refunded equals total paid) or `PARTIALLY_REFUNDED`. Pending refunds transition to `REFUND_PENDING` without prematurely marking the order as refunded.
+
+---
+
+## 14. Audit Log Sensitive Field Redaction
+- **Pre-Storage Redaction Engine (`src/services/audit.service.ts`):**
+  - Prior to writing any `AuditLog` row to PostgreSQL, metadata is recursively scanned and all sensitive fields matching the following 7 categories are stripped:
+    1. `password` (e.g. `password`, `oldPassword`, `newPasswordHash`)
+    2. `token` (e.g. `accessToken`, `refreshToken`, `apiToken`, `csrfToken`)
+    3. `secret` (e.g. `clientSecret`, `webhookSecret`)
+    4. `cookie` (e.g. `sessionCookie`, `cookieHeader`)
+    5. `authorization` (e.g. `authorization`, `authHeader`)
+    6. `otp` (e.g. `smsOtp`, `emailOtp`, `otpCode`)
+    7. `card` (e.g. `cardNumber`, `creditCard`, `cardCvv`, `cvv`)
+  - Redaction applies recursively through nested objects and arrays before database persistence.
+
 

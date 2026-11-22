@@ -482,6 +482,37 @@ The following items are implemented according to Prisma models and interfaces, b
        4. Terminal status guard: receives rejected on `RECEIVED` or `CANCELLED` POs (400 Bad Request).
        5. Concurrent audit approve serialization: exactly one succeeds, duplicate approve rejected with 400, exactly one set of ledger adjustments created.
 
+---
+
+## Post-M16 Hardening: Backend Gaps, Operational Correctness & Contract Alignment (BG-06, BG-26, BG-27, Audit Redaction)
+- **Status:** Completed & Verified (Live Neon PostgreSQL Integration Tests Passing 2x Twice)
+- **Key Deliverables:**
+  1. **Atomic Refund Engine & Balance Capping (BG-27) (`src/modules/refunds/refunds.service.ts`):**
+     - Pessimistic row locking on Order and Payment (`SELECT ... FOR UPDATE`).
+     - Re-reads prior refunds under lock; strictly guarantees `totalRefunded <= totalPaid`; rejects over-refunds with 400 Bad Request.
+     - Real SSLCOMMERZ refund validator API call via `sslcommerzGateway.initiateRefund`; zero fake simulated IDs.
+     - Manual offline refund settlement supported via `manualReference`. COD orders processed as manual refunds.
+     - Order and Payment `paymentStatus` updated conditionally (`REFUNDED` vs `PARTIALLY_REFUNDED` vs `REFUND_PENDING`).
+  2. **Flash Sale Update & Cancellation Lifecycle (BG-06) (`src/modules/coupons/`):**
+     - Added endpoints: `GET /admin/flash-sales`, `GET /admin/flash-sales/:id`, `PATCH /admin/flash-sales/:id`, `POST /admin/flash-sales/:id/cancel`, `DELETE /admin/flash-sales/:id`.
+     - Overlap conflict validation executed inside transaction.
+     - Deletion guard: hard delete blocked if flash sale has already started (`startsAt <= now`).
+     - OpenAPI extended and exported with 100% coverage (260/260 operations documented, 0 undocumented).
+  3. **Order Fulfillment Shipment Guard (BG-26) (`src/modules/orders/orders.service.ts`):**
+     - Transitioning order status to `SHIPPED` strictly enforces an existing `Shipment` record with a valid `courierName`; otherwise throws HTTP 400 Bad Request.
+  4. **Sensitive Field Redaction in Audit Logs (`src/services/audit.service.ts`):**
+     - Pre-storage recursive sanitizer strips 7 sensitive key categories: `password`, `token`, `secret`, `cookie`, `authorization`, `otp`, `card`.
+  5. **Real DB Integration Test Suite (`tests/integration/backend-gaps-patch.integration.test.ts`):**
+     - 7/7 real Neon DB integration tests passed twice (Run 1: 65.32s, Run 2: 62.78s, 0 failed, 0 flaky):
+       1. Concurrent refunds capped at paid amount + idempotency replay.
+       2. COD manual refund settlement.
+       3. SSLCOMMERZ gateway failure rollback (zero refunds persisted, status stays PAID).
+       4. Flash sale creation, update, overlap conflict rejection, and cancellation.
+       5. Deletion guard for ongoing flash sale.
+       6. SHIPPED transition blocked without shipment row, allowed after courier tracking attached.
+       7. Audit log sensitive metadata redaction verified in database.
+
+
 
 
 
