@@ -170,6 +170,7 @@ describe.skipIf(!hasTestDb)(
           name: 'L / White',
           sku: `SKU-REV-${suffix}`,
           price: 2500,
+          costPrice: 1500,
           isActive: true,
         },
       });
@@ -206,6 +207,7 @@ describe.skipIf(!hasTestDb)(
               sku: variant.sku,
               quantity: 1,
               unitPrice: 2500,
+              costPrice: 1500,
               lineTotal: 2500,
             },
           },
@@ -237,46 +239,70 @@ describe.skipIf(!hasTestDb)(
     }, 60000);
 
     afterAll(async () => {
-      if (productId) {
-        await prisma.reviewImage.deleteMany({
-          where: { review: { productId } },
-        });
-        await prisma.review.deleteMany({ where: { productId } });
+      try {
+        if (productId) {
+          await prisma.reviewImage.deleteMany({
+            where: { review: { productId } },
+          }).catch(() => {});
+          await prisma.review.deleteMany({ where: { productId } }).catch(() => {});
+        }
+      } finally {
+        try {
+          if (orderItemId) {
+            await prisma.orderItem.deleteMany({ where: { id: orderItemId } }).catch(() => {});
+          }
+        } finally {
+          try {
+            if (orderId) {
+              await prisma.order.deleteMany({ where: { id: orderId } }).catch(() => {});
+            }
+          } finally {
+            try {
+              if (variantId) {
+                await prisma.productVariant.deleteMany({ where: { id: variantId } }).catch(() => {});
+              }
+            } finally {
+              try {
+                if (productId) {
+                  await prisma.product.deleteMany({ where: { id: productId } }).catch(() => {});
+                }
+              } finally {
+                try {
+                  if (categoryId) {
+                    await prisma.category.deleteMany({ where: { id: categoryId } }).catch(() => {});
+                  }
+                } finally {
+                  try {
+                    await prisma.auditLog.deleteMany({
+                      where: {
+                        OR: [
+                          { id: createdAuditLogId },
+                          { actorId: { in: [superAdminId, verifiedBuyerId, unverifiedBuyerId].filter(Boolean) } },
+                        ],
+                      },
+                    }).catch(() => {});
+                  } finally {
+                    try {
+                      await prisma.notification.deleteMany({
+                        where: { template: 'new_review_admin_alert' },
+                      }).catch(() => {});
+                    } finally {
+                      const userIds = [superAdminId, supportStaffId, verifiedBuyerId, unverifiedBuyerId].filter(
+                        Boolean,
+                      );
+                      if (userIds.length > 0) {
+                        await prisma.userRole.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
+                        await prisma.user.deleteMany({ where: { id: { in: userIds } } }).catch(() => {});
+                      }
+                      await prisma.$disconnect().catch(() => {});
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-      if (orderItemId) {
-        await prisma.orderItem.deleteMany({ where: { id: orderItemId } });
-      }
-      if (orderId) {
-        await prisma.order.deleteMany({ where: { id: orderId } });
-      }
-      if (variantId) {
-        await prisma.productVariant.deleteMany({ where: { id: variantId } });
-      }
-      if (productId) {
-        await prisma.product.deleteMany({ where: { id: productId } });
-      }
-      if (categoryId) {
-        await prisma.category.deleteMany({ where: { id: categoryId } });
-      }
-      await prisma.auditLog.deleteMany({
-        where: {
-          OR: [
-            { id: createdAuditLogId },
-            { actorId: { in: [superAdminId, verifiedBuyerId, unverifiedBuyerId].filter(Boolean) } },
-          ],
-        },
-      });
-      await prisma.notification.deleteMany({
-        where: { template: 'new_review_admin_alert' },
-      });
-      const userIds = [superAdminId, supportStaffId, verifiedBuyerId, unverifiedBuyerId].filter(
-        Boolean,
-      );
-      if (userIds.length > 0) {
-        await prisma.userRole.deleteMany({ where: { userId: { in: userIds } } });
-        await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-      }
-      await prisma.$disconnect();
     }, 60000);
 
     it('rejects review submission from a user without a delivered purchase (403)', async () => {

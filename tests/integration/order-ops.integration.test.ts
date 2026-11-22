@@ -78,6 +78,7 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
         name: 'Ops Variant L',
         sku: `OPS-SLK-${Date.now()}`,
         price: '1500.00',
+        costPrice: '900.00',
         isActive: true,
       },
     });
@@ -105,50 +106,70 @@ describe('M12 Order Operations Integration Tests (Shipping, Coupons, Returns, Re
   });
 
   afterAll(async () => {
-    // Clean up created entities in reverse foreign key order
+    // Clean up created entities in reverse foreign key order with resilient try/finally blocks
     try {
       if (cleanupOrderIds.length > 0) {
-        await prisma.refund.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
+        await prisma.refund.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
         await prisma.returnItem.deleteMany({
           where: { returnRequest: { orderId: { in: cleanupOrderIds } } },
-        });
-        await prisma.returnRequest.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
+        }).catch(() => {});
+        await prisma.returnRequest.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
         await prisma.shipmentEvent.deleteMany({
           where: { shipment: { orderId: { in: cleanupOrderIds } } },
-        });
+        }).catch(() => {});
         await prisma.deliveryAttempt.deleteMany({
           where: { shipment: { orderId: { in: cleanupOrderIds } } },
-        });
-        await prisma.shipment.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.couponUsage.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.payment.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.orderNote.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.orderItem.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.fraudAssessment.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-        await prisma.order.deleteMany({ where: { id: { in: cleanupOrderIds } } });
+        }).catch(() => {});
+        await prisma.shipment.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.couponUsage.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.payment.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.orderNote.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.orderItem.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.fraudAssessment.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+        await prisma.order.deleteMany({ where: { id: { in: cleanupOrderIds } } }).catch(() => {});
       }
-
-      if (cleanupCouponIds.length > 0) {
-        await prisma.couponUsage.deleteMany({ where: { couponId: { in: cleanupCouponIds } } });
-        await prisma.coupon.deleteMany({ where: { id: { in: cleanupCouponIds } } });
+    } finally {
+      try {
+        if (cleanupCouponIds.length > 0) {
+          await prisma.couponUsage.deleteMany({ where: { couponId: { in: cleanupCouponIds } } }).catch(() => {});
+          await prisma.coupon.deleteMany({ where: { id: { in: cleanupCouponIds } } }).catch(() => {});
+        }
+      } finally {
+        try {
+          if (cleanupZoneIds.length > 0) {
+            await prisma.shippingMethod.deleteMany({ where: { shippingZoneId: { in: cleanupZoneIds } } }).catch(() => {});
+            await prisma.shippingZone.deleteMany({ where: { id: { in: cleanupZoneIds } } }).catch(() => {});
+          }
+        } finally {
+          try {
+            if (cleanupSessionIds.length > 0) {
+              await prisma.checkoutEvent.deleteMany({ where: { checkoutSessionId: { in: cleanupSessionIds } } }).catch(() => {});
+              await prisma.checkoutSession.deleteMany({ where: { id: { in: cleanupSessionIds } } }).catch(() => {});
+            }
+          } finally {
+            try {
+              if (testVariantId) {
+                await prisma.inventory.deleteMany({ where: { variantId: testVariantId } }).catch(() => {});
+                await prisma.productVariant.updateMany({
+                  where: { id: testVariantId },
+                  data: { deletedAt: new Date() },
+                }).catch(() => {});
+              }
+            } finally {
+              if (_testProductId) {
+                await prisma.product.updateMany({
+                  where: { id: _testProductId },
+                  data: { deletedAt: new Date() },
+                }).catch(() => {});
+              }
+            }
+          }
+        }
       }
-
-      if (cleanupZoneIds.length > 0) {
-        await prisma.shippingMethod.deleteMany({ where: { shippingZoneId: { in: cleanupZoneIds } } });
-        await prisma.shippingZone.deleteMany({ where: { id: { in: cleanupZoneIds } } });
-      }
-
-      if (cleanupSessionIds.length > 0) {
-        await prisma.checkoutEvent.deleteMany({ where: { checkoutSessionId: { in: cleanupSessionIds } } });
-        await prisma.checkoutSession.deleteMany({ where: { id: { in: cleanupSessionIds } } });
-      }
-
-      // Note: StockMovement has an append-only trigger in PostgreSQL.
-      // We do not delete StockMovement rows per docs/AGENT_RULES.md.
-    } catch {
-      // Ignore cleanup error
     }
+    // Note: StockMovement has an append-only trigger in PostgreSQL.
+    // We do not delete StockMovement rows per docs/AGENT_RULES.md.
   });
 
   // Helper to create an active checkout session

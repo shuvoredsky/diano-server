@@ -103,6 +103,7 @@ describe.skipIf(!isTestDbAvailable)(
           name: 'Default Black',
           sku: `PAY-SKU-${Date.now()}`,
           price: 1000.0,
+          costPrice: 600.0,
           isActive: true,
         },
       });
@@ -167,59 +168,67 @@ describe.skipIf(!isTestDbAvailable)(
     });
 
     afterAll(async () => {
-      // Targeted cleanup — NEVER delete from StockMovement
-      if (createdOrderIds.length > 0) {
-        await prisma.refund.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
-        await prisma.paymentEvent.deleteMany({ where: { payment: { orderId: { in: createdOrderIds } } } }).catch(() => {});
-        await prisma.payment.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
-        await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
-        await prisma.orderNote.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
-        await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
-        await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } }).catch(() => {});
-      }
-
-      if (testVariantId) {
-        await prisma.inventory.deleteMany({ where: { variantId: testVariantId } }).catch(() => {});
-        await prisma.productVariant.updateMany({
-          where: { id: testVariantId },
-          data: { deletedAt: new Date() },
-        }).catch(() => {});
-      }
-      if (testProductId) {
-        await prisma.product.updateMany({
-          where: { id: testProductId },
-          data: { deletedAt: new Date() },
-        }).catch(() => {});
-      }
-      if (testCategoryId) {
-        await prisma.category.updateMany({
-          where: { id: testCategoryId },
-          data: { deletedAt: new Date() },
-        }).catch(() => {});
-      }
-      if (createdVariantIds.length > 0) {
-        await prisma.inventory.deleteMany({ where: { variantId: { in: createdVariantIds } } }).catch(() => {});
-        await prisma.productVariant.updateMany({
-          where: { id: { in: createdVariantIds } },
-          data: { deletedAt: new Date() },
-        }).catch(() => {});
-      }
-      if (createdProductIds.length > 0) {
-        await prisma.product.updateMany({
-          where: { id: { in: createdProductIds } },
-          data: { deletedAt: new Date() },
-        }).catch(() => {});
-      }
-      if (createdCategoryIds.length > 0) {
-        await prisma.category.updateMany({
-          where: { id: { in: createdCategoryIds } },
-          data: { deletedAt: new Date() },
-        }).catch(() => {});
-      }
-      if (createdUserIds.length > 0) {
-        await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => {});
-        await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => {});
-        await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }).catch(() => {});
+      // Targeted cleanup with try/finally guarantee — NEVER delete from StockMovement
+      try {
+        if (createdOrderIds.length > 0) {
+          await prisma.refund.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+          await prisma.paymentEvent.deleteMany({ where: { payment: { orderId: { in: createdOrderIds } } } }).catch(() => {});
+          await prisma.payment.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+          await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+          await prisma.orderNote.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+          await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } }).catch(() => {});
+          await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } }).catch(() => {});
+        }
+      } finally {
+        try {
+          if (testVariantId) {
+            await prisma.inventory.deleteMany({ where: { variantId: testVariantId } }).catch(() => {});
+            await prisma.productVariant.updateMany({
+              where: { id: testVariantId },
+              data: { deletedAt: new Date() },
+            }).catch(() => {});
+          }
+          if (testProductId) {
+            await prisma.product.updateMany({
+              where: { id: testProductId },
+              data: { deletedAt: new Date() },
+            }).catch(() => {});
+          }
+          if (testCategoryId) {
+            await prisma.category.updateMany({
+              where: { id: testCategoryId },
+              data: { deletedAt: new Date() },
+            }).catch(() => {});
+          }
+        } finally {
+          try {
+            if (createdVariantIds.length > 0) {
+              await prisma.inventory.deleteMany({ where: { variantId: { in: createdVariantIds } } }).catch(() => {});
+              await prisma.productVariant.updateMany({
+                where: { id: { in: createdVariantIds } },
+                data: { deletedAt: new Date() },
+              }).catch(() => {});
+            }
+            if (createdProductIds.length > 0) {
+              await prisma.product.updateMany({
+                where: { id: { in: createdProductIds } },
+                data: { deletedAt: new Date() },
+              }).catch(() => {});
+            }
+            if (createdCategoryIds.length > 0) {
+              await prisma.category.updateMany({
+                where: { id: { in: createdCategoryIds } },
+                data: { deletedAt: new Date() },
+              }).catch(() => {});
+            }
+          } finally {
+            if (createdUserIds.length > 0) {
+              await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => {});
+              await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } }).catch(() => {});
+              await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }).catch(() => {});
+            }
+          }
+        }
       }
     });
 
@@ -569,6 +578,7 @@ describe.skipIf(!isTestDbAvailable)(
           sku: `SKU-RETRY-${Date.now()}`,
           name: 'Retry Variant',
           price: 1200.0,
+          costPrice: 700.0,
           isActive: true,
         },
       });
@@ -674,6 +684,7 @@ describe.skipIf(!isTestDbAvailable)(
           sku: `SKU-INSUFF-${Date.now()}`,
           name: 'Insuff Variant',
           price: 1000.0,
+          costPrice: 600.0,
           isActive: true,
         },
       });
@@ -774,6 +785,7 @@ describe.skipIf(!isTestDbAvailable)(
           sku: `SKU-EXP-${Date.now()}`,
           name: 'Exp Variant',
           price: 800.0,
+          costPrice: 500.0,
           isActive: true,
         },
       });

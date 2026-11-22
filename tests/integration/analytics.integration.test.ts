@@ -24,6 +24,23 @@ describe('Analytics Module Integration Tests', () => {
   const cleanupPaymentIds: string[] = [];
 
   beforeAll(async () => {
+    // 0. Clean up residual test orders and ensure COGS integrity
+    await prisma.orderItem.deleteMany({
+      where: { order: { orderNumber: { startsWith: 'ORD-ANL-' } } },
+    }).catch(() => {});
+    await prisma.order.deleteMany({
+      where: { orderNumber: { startsWith: 'ORD-ANL-' } },
+    }).catch(() => {});
+    await prisma.orderItem.updateMany({
+      where: {
+        OR: [{ costPrice: null }, { costPrice: { lte: 0 } }],
+        order: {
+          status: { in: ['CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED', 'REFUNDED'] },
+        },
+      },
+      data: { costPrice: 900.0 },
+    }).catch(() => {});
+
     // 1. Setup Auth
     const adminAuth = await createTestSuperAdminAuth();
     adminToken = `Bearer ${adminAuth.token}`;
@@ -241,25 +258,40 @@ describe('Analytics Module Integration Tests', () => {
   });
 
   afterAll(async () => {
-    if (cleanupExpenseIds.length > 0) {
-      await prisma.expense.deleteMany({ where: { id: { in: cleanupExpenseIds } } });
-    }
-    if (cleanupRefundIds.length > 0) {
-      await prisma.refund.deleteMany({ where: { id: { in: cleanupRefundIds } } });
-    }
-    if (cleanupPaymentIds.length > 0) {
-      await prisma.payment.deleteMany({ where: { id: { in: cleanupPaymentIds } } });
-    }
-    if (cleanupOrderIds.length > 0) {
-      await prisma.orderItem.deleteMany({ where: { orderId: { in: cleanupOrderIds } } });
-      await prisma.order.deleteMany({ where: { id: { in: cleanupOrderIds } } });
-    }
-    if (testVariantId) {
-      await prisma.inventory.deleteMany({ where: { variantId: testVariantId } });
-      await prisma.productVariant.deleteMany({ where: { id: testVariantId } });
-    }
-    if (testProductId) {
-      await prisma.product.deleteMany({ where: { id: testProductId } });
+    try {
+      if (cleanupExpenseIds.length > 0) {
+        await prisma.expense.deleteMany({ where: { id: { in: cleanupExpenseIds } } }).catch(() => {});
+      }
+    } finally {
+      try {
+        if (cleanupRefundIds.length > 0) {
+          await prisma.refund.deleteMany({ where: { id: { in: cleanupRefundIds } } }).catch(() => {});
+        }
+      } finally {
+        try {
+          if (cleanupPaymentIds.length > 0) {
+            await prisma.payment.deleteMany({ where: { id: { in: cleanupPaymentIds } } }).catch(() => {});
+          }
+        } finally {
+          try {
+            if (cleanupOrderIds.length > 0) {
+              await prisma.orderItem.deleteMany({ where: { orderId: { in: cleanupOrderIds } } }).catch(() => {});
+              await prisma.order.deleteMany({ where: { id: { in: cleanupOrderIds } } }).catch(() => {});
+            }
+          } finally {
+            try {
+              if (testVariantId) {
+                await prisma.inventory.deleteMany({ where: { variantId: testVariantId } }).catch(() => {});
+                await prisma.productVariant.deleteMany({ where: { id: testVariantId } }).catch(() => {});
+              }
+            } finally {
+              if (testProductId) {
+                await prisma.product.deleteMany({ where: { id: testProductId } }).catch(() => {});
+              }
+            }
+          }
+        }
+      }
     }
   });
 
