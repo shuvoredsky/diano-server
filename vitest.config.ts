@@ -9,6 +9,7 @@ export default defineConfig({
     hookTimeout: 30000,
     fileParallelism: false,
     maxWorkers: 1,
+    isolate: true, // Retained true to prevent mock pollution across unit test suites
     env: {
       BCRYPT_ROUNDS: '4',
       NODE_ENV: 'test',

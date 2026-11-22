@@ -36,7 +36,7 @@ Neon provides two distinct connection strings:
 Execute migrations manually from local CLI or CI/CD pipeline:
 ```bash
 # Set DIRECT_URL to Neon unpooled connection string
-export DATABASE_URL="postgresql://user:pass@ep-project.singapore.aws.neon.tech/neondb?sslmode=require"
+export DATABASE_URL="postgresql://user:pass@ep-project.singapore.aws.neon.tech/neondb?sslmode=verify-full"
 
 # Apply all pending migrations safely
 npx prisma migrate deploy
