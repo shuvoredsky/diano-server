@@ -33,13 +33,36 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'checkoutsecret',
   'authorization',
   'cookie',
+  'setcookie',
   'set-cookie',
   'cvv',
   'cardnumber',
+  'card_number',
   'apikey',
   'privatekey',
   'otp',
+  'card',
+  'creditcard',
+  'debitcard',
+  'pin',
 ]);
+
+/**
+ * Checks if a key name matches any sensitive credential patterns
+ */
+export function isSensitiveField(key: string): boolean {
+  const normalizedKey = key.toLowerCase().replace(/[_\-\s]/g, '');
+  return (
+    SENSITIVE_METADATA_KEYS.has(normalizedKey) ||
+    normalizedKey.includes('password') ||
+    normalizedKey.includes('secret') ||
+    normalizedKey.includes('token') ||
+    normalizedKey.includes('authorization') ||
+    normalizedKey.includes('cookie') ||
+    normalizedKey.includes('otp') ||
+    normalizedKey.includes('card')
+  );
+}
 
 /**
  * Recursively strips any sensitive credentials, tokens, or secrets from audit metadata.
@@ -54,14 +77,7 @@ export function sanitizeAuditMetadata(
 
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
-    if (
-      SENSITIVE_METADATA_KEYS.has(normalizedKey) ||
-      normalizedKey.includes('password') ||
-      normalizedKey.includes('secret') ||
-      normalizedKey.includes('token') ||
-      normalizedKey.includes('authorization')
-    ) {
+    if (isSensitiveField(key)) {
       continue;
     }
 

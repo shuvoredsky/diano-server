@@ -47,7 +47,7 @@ describe('AuditLogsService & Metadata Redaction (Unit Tests)', () => {
     service = new AuditLogsService(mockRepo);
   });
 
-  it('recursively strips secret, token, password, and authorization keys from metadata', () => {
+  it('recursively strips password, token, secret, cookie, authorization, otp, and card keys from metadata', () => {
     const cleaned = sanitizeAuditMetadata({
       orderId: 'ord_1',
       password: '123',
@@ -55,9 +55,18 @@ describe('AuditLogsService & Metadata Redaction (Unit Tests)', () => {
       accessToken: 'jwt',
       clientSecret: 'sec',
       authorization: 'Bearer xyz',
+      sessionCookie: 'sid=abc',
+      authOtp: '123456',
+      creditCardNumber: '4111222233334444',
+      cardCvv: '999',
       nested: {
         token: 'abc',
         note: 'Safe note',
+        cookie: 'secret_cookie',
+        otpCode: '654321',
+        card: {
+          pan: '1234',
+        },
       },
     });
 
