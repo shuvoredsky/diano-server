@@ -35,6 +35,7 @@ import {
   customerNotificationsRouter,
   adminNotificationsRouter,
 } from '../src/modules/notifications/notifications.routes';
+import { adminSectionsRouter, publicSectionsRouter } from '../src/modules/sections/sections.routes';
 import { healthRouter } from '../src/routes/health.routes';
 import { swaggerDocument } from '../src/docs/swagger';
 
@@ -89,6 +90,8 @@ export function getAllRegisteredEndpoints(): RouteEntry[] {
     { prefix: '/api/v1/admin/reports', router: adminReportsRouter },
     { prefix: '/api/v1/notifications', router: customerNotificationsRouter },
     { prefix: '/api/v1/admin/notifications', router: adminNotificationsRouter },
+    { prefix: '/api/v1/admin/sections', router: adminSectionsRouter },
+    { prefix: '/api/v1/public/sections', router: publicSectionsRouter },
   ];
 
   const endpoints: RouteEntry[] = [];

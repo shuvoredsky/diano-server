@@ -124,13 +124,14 @@ describe('CategoriesService (Unit Tests with Mocked Repository)', () => {
         id: 'cat-level-6',
         parentId: 'cat-level-5',
       });
-      // Ancestors return 5 items -> parent is depth 6
+      // Ancestors return 6 items -> parent is depth 6
       vi.spyOn(mockRepo, 'getAncestors').mockResolvedValue([
         { ...sampleCategory, id: 'cat-level-1' },
         { ...sampleCategory, id: 'cat-level-2' },
         { ...sampleCategory, id: 'cat-level-3' },
         { ...sampleCategory, id: 'cat-level-4' },
         { ...sampleCategory, id: 'cat-level-5' },
+        { ...sampleCategory, id: 'cat-level-6' },
       ]);
 
       await expect(
@@ -163,12 +164,13 @@ describe('CategoriesService (Unit Tests with Mocked Repository)', () => {
     it('should block hierarchy moves that exceed max depth limit', async () => {
       vi.spyOn(mockRepo, 'findById').mockResolvedValue(sampleCategory);
       vi.spyOn(mockRepo, 'getDescendantIds').mockResolvedValue(['cat-child-1']);
-      // Parent is depth 5 (4 ancestors)
+      // Parent is depth 5 (5 ancestors)
       vi.spyOn(mockRepo, 'getAncestors').mockResolvedValue([
         { ...sampleCategory, id: 'root-1' },
         { ...sampleCategory, id: 'root-2' },
         { ...sampleCategory, id: 'root-3' },
         { ...sampleCategory, id: 'root-4' },
+        { ...sampleCategory, id: 'root-5' },
       ]);
       // Subtree depth is 2 (category + child)
       vi.spyOn(mockRepo, 'findAll').mockResolvedValue([

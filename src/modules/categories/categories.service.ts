@@ -64,9 +64,9 @@ export class CategoriesService {
    * Calculate category depth in tree (1 = Root, 2 = Child, 3 = Sub-child)
    */
   private async calculateDepth(parentId: string | null): Promise<number> {
-    if (!parentId) return 1;
+    if (!parentId) return 0;
     const ancestors = await this.repo.getAncestors(parentId);
-    return ancestors.length + 1;
+    return ancestors.length;
   }
 
   /**

@@ -47,9 +47,9 @@ export class SectionsService {
   }
 
   private async calculateDepth(parentId: string | null): Promise<number> {
-    if (!parentId) return 1;
+    if (!parentId) return 0;
     const ancestors = await this.repo.getAncestors(parentId);
-    return ancestors.length + 1;
+    return ancestors.length;
   }
 
   private async getSubtreeMaxDepth(sectionId: string): Promise<number> {

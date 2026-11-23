@@ -512,6 +512,26 @@ The following items are implemented according to Prisma models and interfaces, b
        6. SHIPPED transition blocked without shipment row, allowed after courier tracking attached.
        7. Audit log sensitive metadata redaction verified in database.
 
+---
+
+### Milestone M15: Unlimited-Depth Category Hierarchy & Storefront Merchandising Sections
+- **Status:** Complete (TypeScript 0 errors, ESLint 0 warnings, 42/42 tests passing, OpenAPI 272/272 100% coverage).
+- **Key Deliverables:**
+  1. **Configurable Deep Category Hierarchy (`src/modules/categories/`):**
+     - Replaced hard depth-3 limit with configurable `CATEGORY_MAX_DEPTH` (default 6, min 3, max 20).
+     - Full cycle protection preventing moving/parenting any category under its own descendants.
+     - Specification template inheritance traversing root-to-leaf with child override precedence.
+     - Descendant product filtering: querying by category automatically resolves all products across descendant subtrees.
+  2. **Storefront Merchandising Sections (`src/modules/sections/`):**
+     - Schema & Migration: `Section` model with parent/child hierarchy, display ordering, schedule window (`startsAt`, `endsAt`), and `ProductSection` join table with sort ordering.
+     - Admin Endpoints: Full CRUD, batch reordering (`PATCH /reorder`), active toggle (`PATCH /:id/toggle`), product assignment (`POST /:id/products`), product removal (`DELETE /:id/products/:productId`), product reordering (`PUT /:id/products/reorder`).
+     - Public Endpoints: `GET /public/sections` (active & scheduled hierarchy tree) and `GET /public/sections/:slug/products` (paginated catalog cards).
+     - Product Create/Update: Transactional synchronization of `sectionIds?: string[]`.
+  3. **Verification & Testing:**
+     - 42/42 unit and integration tests passing (`tests/unit/categories.service.test.ts`, `tests/unit/sections.service.test.ts`, `tests/unit/permission-slugs.test.ts`, `tests/integration/categories-deep.integration.test.ts`, `tests/integration/sections.integration.test.ts`).
+     - OpenAPI documentation updated with 272/272 endpoints (0 undocumented).
+
+
 
 
 

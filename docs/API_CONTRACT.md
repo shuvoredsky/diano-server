@@ -219,4 +219,36 @@ To prevent duplicate financial transactions during network retries:
     7. `card` (e.g. `cardNumber`, `creditCard`, `cardCvv`, `cvv`)
   - Redaction applies recursively through nested objects and arrays before database persistence.
 
+---
+
+## 15. Unlimited-Depth Category Hierarchy & Safe Moves
+- **Configurable Maximum Depth:** Enforces a configurable depth boundary (`CATEGORY_MAX_DEPTH`, default `6`, valid between `3` and `20`) on category creation and updates.
+- **Hierarchical Cycle Protection:** Attempting to assign a category as a child of itself or any of its own descendants is strictly blocked with `400 Bad Request` (`Cannot set a descendant category as parent (cyclic hierarchy blocked)`).
+- **Specification Template Inheritance:** `GET /api/v1/categories/:id/product-form-schema` returns a merged schema traversing from root to leaf, where leaf definitions override ancestor fields sharing the same key.
+- **Recursive Descendant Product Filtering:** Filtering catalog products via `GET /api/v1/products?categoryId=<id>` automatically expands to include products in the specified category as well as all its descendant categories. For backward compatibility, `subcategoryId` query parameter continues to be accepted.
+- **Node-Agnostic Product Attachment:** Products can attach directly to any category node at any tree depth (root, intermediate, or leaf).
+
+---
+
+## 16. Storefront Merchandising Sections
+- **Model Definition:**
+  - `Section`: `id`, `name`, `slug`, `description`, `imageUrl`, `parentId`, `displayOrder`, `isActive`, `startsAt`, `endsAt`, `createdAt`, `updatedAt`.
+  - `ProductSection`: composite primary key `(productId, sectionId)`, `sortOrder`.
+- **Admin Management (`/api/v1/admin/sections`):**
+  - `GET /api/v1/admin/sections`: Returns hierarchical tree of sections with `productCount`, `depth`, and nested `children`.
+  - `POST /api/v1/admin/sections`: Create a new section. Body: `{ name, slug?, description?, imageUrl?, parentId?, displayOrder?, isActive?, startsAt?, endsAt? }`.
+  - `GET /api/v1/admin/sections/:id`: Fetch single section details by ID.
+  - `PATCH /api/v1/admin/sections/:id`: Update section properties, parent hierarchy, or schedule.
+  - `DELETE /api/v1/admin/sections/:id`: Deletes section and cleanly cascades `ProductSection` records. Blocks deletion with `400 Bad Request` if child sub-sections exist.
+  - `PATCH /api/v1/admin/sections/reorder`: Reorder sections. Body: `{ items: [{ id, displayOrder, parentId? }] }`.
+  - `PATCH /api/v1/admin/sections/:id/toggle`: Toggles `isActive` flag.
+  - `POST /api/v1/admin/sections/:id/products`: Assign products to section. Body: `{ productIds: string[] }` or `{ items: [{ productId, sortOrder? }] }`.
+  - `DELETE /api/v1/admin/sections/:id/products/:productId`: Remove product from section.
+  - `PUT /api/v1/admin/sections/:id/products/reorder`: Reorder products in section. Body: `{ items: [{ productId, sortOrder }] }`.
+- **Public Storefront (`/api/v1/public/sections`):**
+  - `GET /api/v1/public/sections`: Returns active sections tree where `isActive = true` and `startsAt <= now <= endsAt` (if scheduled), ordered by `displayOrder asc`.
+  - `GET /api/v1/public/sections/:slug/products`: Returns paginated active products belonging to the section, ordered by `sortOrder asc` and `createdAt desc`.
+- **Product Integration:**
+  - `POST /api/v1/products` and `PATCH /api/v1/products/:id` accept optional `sectionIds?: string[]` to synchronize section associations transactionally.
+
 

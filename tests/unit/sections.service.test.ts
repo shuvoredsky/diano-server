@@ -140,6 +140,7 @@ describe('SectionsService (Unit Tests with Mocked Repository)', () => {
         { ...sampleSection, id: 'sec-3' },
         { ...sampleSection, id: 'sec-4' },
         { ...sampleSection, id: 'sec-5' },
+        { ...sampleSection, id: 'sec-6' },
       ]);
 
       await expect(
@@ -177,6 +178,7 @@ describe('SectionsService (Unit Tests with Mocked Repository)', () => {
         { ...sampleSection, id: 'sec-2' },
         { ...sampleSection, id: 'sec-3' },
         { ...sampleSection, id: 'sec-4' },
+        { ...sampleSection, id: 'sec-5' },
       ]);
       vi.spyOn(mockRepo, 'findAll').mockResolvedValue([
         sampleSection,
@@ -226,9 +228,9 @@ describe('SectionsService (Unit Tests with Mocked Repository)', () => {
     it('should assign valid products to section', async () => {
       vi.spyOn(mockRepo, 'findById').mockResolvedValue(sampleSection);
       vi.spyOn(prisma.product, 'findMany').mockResolvedValue([
-        { id: 'prod-1' } as any,
-        { id: 'prod-2' } as any,
-      ]);
+        { id: 'prod-1' },
+        { id: 'prod-2' },
+      ] as unknown as never);
 
       await service.assignProducts(
         'sec-root',
@@ -244,7 +246,9 @@ describe('SectionsService (Unit Tests with Mocked Repository)', () => {
 
     it('should reject assignment if some product does not exist', async () => {
       vi.spyOn(mockRepo, 'findById').mockResolvedValue(sampleSection);
-      vi.spyOn(prisma.product, 'findMany').mockResolvedValue([{ id: 'prod-1' } as any]);
+      vi.spyOn(prisma.product, 'findMany').mockResolvedValue([
+        { id: 'prod-1' },
+      ] as unknown as never);
 
       await expect(
         service.assignProducts(
@@ -293,3 +297,4 @@ describe('SectionsService (Unit Tests with Mocked Repository)', () => {
     });
   });
 });
+

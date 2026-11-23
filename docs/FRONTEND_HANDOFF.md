@@ -229,7 +229,25 @@ Every JSON response from the server strictly adheres to this envelope:
 
 ---
 
-### Screen 11: Marketing: Coupons & Flash Sales
+### Screen 14: Storefront Merchandising Sections & Deep Categories
+- **Route:** `/admin/merchandising/sections`, `/admin/catalog/categories`
+- **Permissions:** `section:read`, `section:manage`, `category:read`, `category:update`
+- **Primary Endpoints:**
+  - `GET /api/v1/admin/sections`: Tree view of merchandising sections with product count and nested children.
+  - `POST /api/v1/admin/sections`: Create storefront section.
+  - `PATCH /api/v1/admin/sections/:id`: Update section properties, image, or scheduling window.
+  - `PATCH /api/v1/admin/sections/:id/toggle`: Instant activate/deactivate toggle.
+  - `PATCH /api/v1/admin/sections/reorder`: Batch reorder section positions.
+  - `POST /api/v1/admin/sections/:id/products`: Assign product IDs to section.
+  - `PUT /api/v1/admin/sections/:id/products/reorder`: Reorder products inside section.
+  - `DELETE /api/v1/admin/sections/:id/products/:productId`: Detach product from section.
+  - `GET /api/v1/public/sections`: Public storefront layout query (active + currently valid schedule only).
+  - `GET /api/v1/public/sections/:slug/products`: Paginated product cards for section carousel/grid.
+- **Deep Category Tree:**
+  - `GET /api/v1/categories`: Supports arbitrary depth hierarchy (configurable up to 6 levels by default).
+  - `GET /api/v1/categories/:id/product-form-schema`: Merged specification template inheriting from all ancestors down to leaf.
+  - `GET /api/v1/products?categoryId=:id`: Automatically returns all products under category and any descendant subcategories. Product creation/update form supports assigning optional `sectionIds: string[]`.
+
 - **Route:** `/admin/marketing/coupons`, `/admin/marketing/flash-sales`
 - **Permissions:** `coupon:manage`
 - **Primary Endpoints:**
