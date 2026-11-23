@@ -35,6 +35,14 @@ export const errorMiddleware = (
       field: e.path.join('.'),
       message: e.message,
     }));
+    logger.warn(
+      {
+        errors,
+        url: req.originalUrl,
+        method: req.method,
+      },
+      'Zod validation error',
+    );
   } else if (err.name === 'JsonWebTokenError') {
     statusCode = 401;
     message = 'Invalid authentication token';

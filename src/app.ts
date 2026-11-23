@@ -122,7 +122,15 @@ app.use(env.API_PREFIX, rootRouter);
 
 // Static file serving for local uploads (development only)
 if (env.NODE_ENV !== 'production') {
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+  app.use(
+    '/uploads',
+    (_req, res, next) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      next();
+    },
+    express.static(path.resolve(process.cwd(), 'uploads')),
+  );
 }
 
 // Swagger API Documentation (non-production only)

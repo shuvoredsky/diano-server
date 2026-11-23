@@ -25,11 +25,11 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z
     .string()
     .min(32, 'JWT_ACCESS_SECRET must be at least 32 characters long'),
-  JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
+  JWT_ACCESS_EXPIRES_IN: z.string().default('24h'),
   JWT_REFRESH_SECRET: z
     .string()
     .min(32, 'JWT_REFRESH_SECRET must be at least 32 characters long'),
-  JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
   JWT_RESET_PASSWORD_SECRET: z
     .string()
     .min(32, 'JWT_RESET_PASSWORD_SECRET must be at least 32 characters long'),
@@ -53,6 +53,7 @@ const envSchema = z.object({
   ORDER_PAYMENT_TIMEOUT_HOURS: z.coerce.number().positive().default(24),
   ORDER_RETURN_WINDOW_DAYS: z.coerce.number().positive().default(7),
   ORDER_TX_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  CATEGORY_MAX_DEPTH: z.coerce.number().int().min(3).max(20).default(6),
 
   // External Integrations (Optional)
   STORAGE_DRIVER: z.enum(['local', 'cloudinary']).default('local'),

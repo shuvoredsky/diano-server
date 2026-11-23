@@ -865,7 +865,22 @@ export class ProductsService {
     const page = Math.max(1, filter.page ?? 1);
     const limit = Math.min(100, Math.max(1, filter.limit ?? 20));
 
-    const result = await this.repo.findProducts(filter, false);
+    const effectiveCategory = filter.subcategoryId || filter.categoryId;
+    let categoryIds = filter.categoryIds;
+    if (effectiveCategory && (!categoryIds || categoryIds.length === 0)) {
+      const descendants = await this.categoriesRepo.getDescendantIds(effectiveCategory);
+      categoryIds = [effectiveCategory, ...descendants];
+    }
+
+    const result = await this.repo.findProducts(
+      {
+        ...filter,
+        categoryIds,
+        page,
+        limit,
+      },
+      false,
+    );
 
     return {
       items: result.items.map(p => this.formatAdminProduct(p, canViewCost)),
@@ -884,11 +899,11 @@ export class ProductsService {
     const page = Math.max(1, filter.page ?? 1);
     const limit = Math.min(100, Math.max(1, filter.limit ?? 20));
 
-    // If categoryId is filtered, expand to include all descendant categories
-    let categoryIds: string[] | undefined = undefined;
-    if (filter.categoryId) {
-      const descendants = await this.categoriesRepo.getDescendantIds(filter.categoryId);
-      categoryIds = [filter.categoryId, ...descendants];
+    const effectiveCategory = filter.subcategoryId || filter.categoryId;
+    let categoryIds = filter.categoryIds;
+    if (effectiveCategory && (!categoryIds || categoryIds.length === 0)) {
+      const descendants = await this.categoriesRepo.getDescendantIds(effectiveCategory);
+      categoryIds = [effectiveCategory, ...descendants];
     }
 
     const result = await this.repo.findProducts(

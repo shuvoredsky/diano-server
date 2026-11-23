@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from '@/utils/pagination';
-import { PASSWORD_REGEX } from '@/utils/password.util';
 
 export const listUsersQuerySchema = paginationQuerySchema.extend({
   role: z.string().trim().optional(),
@@ -18,9 +17,8 @@ export const createAdminUserSchema = z.object({
   roleSlug: z.string().min(1, 'Role slug is required').trim(),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
+    .min(6, 'Password must be at least 6 characters')
     .max(128)
-    .regex(PASSWORD_REGEX, 'Password must include uppercase, lowercase, digit, and special character')
     .optional(),
 });
 

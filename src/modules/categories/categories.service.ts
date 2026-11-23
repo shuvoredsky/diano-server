@@ -16,13 +16,19 @@ import type { IAuditService } from '@/services/audit.service';
 import { auditService as defaultAuditService } from '@/services/audit.service';
 import type { AccessTokenPayload } from '@/utils/jwt.util';
 import { storageService as defaultStorageService, type StorageService } from '@/services/storage.service';
+import { env } from '@/config/env.config';
 
 export class CategoriesService {
+  private readonly maxDepth: number;
+
   constructor(
     private readonly repo: ICategoriesRepository = defaultCategoriesRepo,
     private readonly auditSvc: IAuditService = defaultAuditService,
     private readonly storageSvc: StorageService = defaultStorageService,
-  ) {}
+    maxDepth?: number,
+  ) {
+    this.maxDepth = maxDepth ?? env.CATEGORY_MAX_DEPTH ?? 6;
+  }
 
   /**
    * Slugify helper
@@ -86,7 +92,7 @@ export class CategoriesService {
     const rawSlugSource = dto.slug && dto.slug.length > 0 ? dto.slug : dto.name;
     const slug = await this.generateUniqueSlug(rawSlugSource);
 
-    // Verify parent & check max depth (max 3 levels)
+    // Verify parent & check max depth
     if (dto.parentId) {
       const parent = await this.repo.findById(dto.parentId);
       if (!parent) {
@@ -94,8 +100,8 @@ export class CategoriesService {
       }
 
       const parentDepth = await this.calculateDepth(dto.parentId);
-      if (parentDepth >= 3) {
-        throw AppError.badRequest('Maximum category depth of 3 levels exceeded');
+      if (parentDepth >= this.maxDepth) {
+        throw AppError.badRequest(`Maximum category depth of ${this.maxDepth} levels exceeded`);
       }
     }
 
@@ -158,11 +164,11 @@ export class CategoriesService {
           );
         }
 
-        // Depth check: new parent depth + subtree depth of current category <= 3
+        // Depth check: new parent depth + subtree depth of current category <= maxDepth
         const parentDepth = await this.calculateDepth(dto.parentId);
         const subtreeDepth = await this.getSubtreeMaxDepth(id);
-        if (parentDepth + subtreeDepth > 3) {
-          throw AppError.badRequest('Moving this category exceeds the maximum depth limit of 3');
+        if (parentDepth + subtreeDepth > this.maxDepth) {
+          throw AppError.badRequest(`Moving this category exceeds the maximum depth limit of ${this.maxDepth}`);
         }
       }
     }
@@ -370,12 +376,21 @@ export class CategoriesService {
       const item = map.get(cat.id)!;
       if (cat.parentId && map.has(cat.parentId)) {
         const parent = map.get(cat.parentId)!;
-        item.depth = parent.depth + 1;
         parent.children.push(item);
       } else if (!cat.parentId) {
         roots.push(item);
       }
     }
+
+    const setDepths = (nodes: CategoryTreeItem[], currentDepth: number) => {
+      for (const node of nodes) {
+        node.depth = currentDepth;
+        if (node.children && node.children.length > 0) {
+          setDepths(node.children, currentDepth + 1);
+        }
+      }
+    };
+    setDepths(roots, 1);
 
     return roots;
   }

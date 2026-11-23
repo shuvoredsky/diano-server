@@ -250,6 +250,7 @@ export interface ProductQueryFilter {
   limit?: number;
   q?: string;
   categoryId?: string;
+  subcategoryId?: string;
   categoryIds?: string[];
   minPrice?: number;
   maxPrice?: number;

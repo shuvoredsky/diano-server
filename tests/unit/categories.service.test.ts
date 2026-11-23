@@ -118,24 +118,27 @@ describe('CategoriesService (Unit Tests with Mocked Repository)', () => {
       );
     });
 
-    it('should block creation if parent depth is already 3 (max depth exceeded)', async () => {
+    it('should block creation if parent depth is already at max depth', async () => {
       vi.spyOn(mockRepo, 'findById').mockResolvedValue({
         ...sampleCategory,
-        id: 'cat-level-3',
-        parentId: 'cat-level-2',
+        id: 'cat-level-6',
+        parentId: 'cat-level-5',
       });
-      // Ancestors return 2 items -> parent is depth 3
+      // Ancestors return 5 items -> parent is depth 6
       vi.spyOn(mockRepo, 'getAncestors').mockResolvedValue([
         { ...sampleCategory, id: 'cat-level-1' },
         { ...sampleCategory, id: 'cat-level-2' },
+        { ...sampleCategory, id: 'cat-level-3' },
+        { ...sampleCategory, id: 'cat-level-4' },
+        { ...sampleCategory, id: 'cat-level-5' },
       ]);
 
       await expect(
         service.createCategory(
-          { name: 'Sub-sub-category', parentId: 'cat-level-3' },
+          { name: 'Sub-sub-category', parentId: 'cat-level-6' },
           mockAdminActor,
         ),
-      ).rejects.toThrow('Maximum category depth of 3 levels exceeded');
+      ).rejects.toThrow('Maximum category depth of 6 levels exceeded');
     });
   });
 
@@ -157,21 +160,26 @@ describe('CategoriesService (Unit Tests with Mocked Repository)', () => {
       ).rejects.toThrow('Cannot set a descendant category as parent (cyclic hierarchy blocked)');
     });
 
-    it('should block hierarchy moves that exceed 3 levels total depth', async () => {
+    it('should block hierarchy moves that exceed max depth limit', async () => {
       vi.spyOn(mockRepo, 'findById').mockResolvedValue(sampleCategory);
       vi.spyOn(mockRepo, 'getDescendantIds').mockResolvedValue(['cat-child-1']);
-      // Parent is depth 2 (1 ancestor)
-      vi.spyOn(mockRepo, 'getAncestors').mockResolvedValue([{ ...sampleCategory, id: 'root-2' }]);
+      // Parent is depth 5 (4 ancestors)
+      vi.spyOn(mockRepo, 'getAncestors').mockResolvedValue([
+        { ...sampleCategory, id: 'root-1' },
+        { ...sampleCategory, id: 'root-2' },
+        { ...sampleCategory, id: 'root-3' },
+        { ...sampleCategory, id: 'root-4' },
+      ]);
       // Subtree depth is 2 (category + child)
       vi.spyOn(mockRepo, 'findAll').mockResolvedValue([
         sampleCategory,
         { ...sampleCategory, id: 'cat-child-1', parentId: 'cat-root' },
       ]);
 
-      // parentDepth (2) + subtreeDepth (2) = 4 > 3
+      // parentDepth (5) + subtreeDepth (2) = 7 > 6
       await expect(
-        service.updateCategory('cat-root', { parentId: 'some-level-2-cat' }, mockAdminActor),
-      ).rejects.toThrow('Moving this category exceeds the maximum depth limit of 3');
+        service.updateCategory('cat-root', { parentId: 'some-level-5-cat' }, mockAdminActor),
+      ).rejects.toThrow('Moving this category exceeds the maximum depth limit of 6');
     });
   });
 

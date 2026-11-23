@@ -184,6 +184,7 @@ export const updateProductFeaturedSchema = z.object({
 export const productQuerySchema = paginationQuerySchema.extend({
   q: z.string().trim().max(100, 'Search query cannot exceed 100 characters').optional(),
   categoryId: z.string().trim().optional(),
+  subcategoryId: z.string().trim().optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
   tags: z
@@ -200,7 +201,24 @@ export const productQuerySchema = paginationQuerySchema.extend({
     .optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
   sortBy: z
-    .enum(['newest', 'price_asc', 'price_desc', 'name_asc', 'name_desc', 'popular'])
+    .enum([
+      'newest',
+      'price_asc',
+      'price_desc',
+      'name_asc',
+      'name_desc',
+      'popular',
+      'createdAt',
+      'updatedAt',
+      'name',
+      'mrp',
+    ])
+    .transform(val => {
+      if (val === 'createdAt' || val === 'updatedAt') return 'newest';
+      if (val === 'name') return 'name_asc';
+      if (val === 'mrp') return 'price_desc';
+      return val;
+    })
     .optional()
     .default('newest'),
 });
