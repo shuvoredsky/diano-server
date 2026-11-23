@@ -592,6 +592,7 @@ model Product {
   reviews       Review[]
   productViews  ProductView[]
   wishlistItems WishlistItem[]
+  sections      ProductSection[]
 
   @@index([categoryId])
   @@index([slug])
@@ -697,6 +698,42 @@ model RelatedProduct {
   @@id([productId, relatedProductId])
   @@index([productId])
   @@index([relatedProductId])
+}
+
+model Section {
+  id           String    @id @default(cuid())
+  name         String
+  slug         String    @unique
+  description  String?
+  imageUrl     String?
+  parentId     String?
+  displayOrder Int       @default(0)
+  isActive     Boolean   @default(true)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  parent   Section?         @relation("SectionHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Section[]        @relation("SectionHierarchy")
+  products ProductSection[]
+
+  @@index([parentId])
+  @@index([slug])
+  @@index([isActive, displayOrder])
+}
+
+model ProductSection {
+  productId String
+  sectionId String
+  sortOrder Int    @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, sectionId])
+  @@index([sectionId, sortOrder])
+  @@index([productId])
 }
 
 // ==============================================================================

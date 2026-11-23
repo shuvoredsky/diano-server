@@ -255,6 +255,18 @@ export class PrismaProductsRepository implements IProductsRepository {
         }
       }
 
+      // Handle section assignments if provided
+      if (data.sectionIds && data.sectionIds.length > 0) {
+        await tx.productSection.createMany({
+          data: data.sectionIds.map((sectionId, idx) => ({
+            productId: product.id,
+            sectionId,
+            sortOrder: idx,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       return tx.product.findUnique({
         where: { id: product.id },
         include: {
@@ -325,6 +337,20 @@ export class PrismaProductsRepository implements IProductsRepository {
         for (const relId of data.relatedProductIds) {
           await tx.relatedProduct.create({
             data: { productId: id, relatedProductId: relId },
+          });
+        }
+      }
+
+      if (data.sectionIds !== undefined) {
+        await tx.productSection.deleteMany({ where: { productId: id } });
+        if (data.sectionIds.length > 0) {
+          await tx.productSection.createMany({
+            data: data.sectionIds.map((sectionId, idx) => ({
+              productId: id,
+              sectionId,
+              sortOrder: idx,
+            })),
+            skipDuplicates: true,
           });
         }
       }

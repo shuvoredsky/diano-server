@@ -20,6 +20,7 @@ import { siteSettingsRouter } from '@/modules/site-settings/site-settings.routes
 import { siteSettingsController } from '@/modules/site-settings/site-settings.controller';
 import { bannersRouter, publicBannersRouter } from '@/modules/banners/banners.routes';
 import { pagesRouter, publicPagesRouter } from '@/modules/pages/pages.routes';
+import { adminSectionsRouter, publicSectionsRouter } from '@/modules/sections/sections.routes';
 import { ordersRouter, adminOrdersRouter } from '@/modules/orders/orders.routes';
 import { paymentsRouter, adminPaymentsRouter } from '@/modules/payments/payments.routes';
 import { adminFraudRouter } from '@/modules/fraud-detection/fraud.routes';
@@ -97,6 +98,10 @@ rootRouter.use('/public/banners', publicBannersRouter);
 // CMS Pages (Admin & Public)
 rootRouter.use('/pages', pagesRouter);
 rootRouter.use('/public/pages', publicPagesRouter);
+
+// Merchandising Sections (Admin & Public)
+rootRouter.use('/admin/sections', adminSectionsRouter);
+rootRouter.use('/public/sections', publicSectionsRouter);
 
 // Orders & Invoicing (Customer & Admin)
 rootRouter.use('/admin/orders', adminOrdersRouter);

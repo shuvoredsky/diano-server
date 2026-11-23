@@ -109,6 +109,7 @@ export const createProductSchema = z
     metaDescription: z.string().trim().max(300).nullable().optional(),
     metaKeywords: z.string().trim().max(200).nullable().optional(),
     tags: z.array(z.string().trim().min(1)).optional().default([]),
+    sectionIds: z.array(z.string().trim().min(1)).optional().default([]),
     relatedProductIds: z.array(z.string().trim()).optional().default([]),
     variants: z.array(variantInputSchema).min(1, 'At least one product variant is required'),
   })
@@ -167,6 +168,7 @@ export const updateProductSchema = z
     metaDescription: z.string().trim().max(300).nullable().optional(),
     metaKeywords: z.string().trim().max(200).nullable().optional(),
     tags: z.array(z.string().trim().min(1)).optional(),
+    sectionIds: z.array(z.string().trim().min(1)).optional(),
     relatedProductIds: z.array(z.string().trim()).optional(),
   })
   .strict();

@@ -118,6 +118,8 @@ export const permissionsData = [
   // CMS
   { resource: 'banner', action: 'manage', name: 'Manage Banners', slug: 'banner:manage', description: 'Create, update, reorder and delete promotional banners' },
   { resource: 'page', action: 'manage', name: 'Manage Pages', slug: 'page:manage', description: 'Create, update, publish and restore CMS pages' },
+  { resource: 'section', action: 'read', name: 'Read Sections', slug: 'section:read', description: 'View storefront merchandising sections' },
+  { resource: 'section', action: 'manage', name: 'Manage Sections', slug: 'section:manage', description: 'Create, update, reorder and delete storefront sections' },
 
   // Checkout & Abandoned Checkout
   { resource: 'checkout', action: 'read', name: 'Read Checkout', slug: 'checkout:read', description: 'View checkout sessions' },
@@ -276,6 +278,7 @@ export async function seedDatabase() {
       'settings:read',
       'banner:manage',
       'page:manage',
+      'section:',
       'payment:read',
       'payment:manage',
       'payment:refund',

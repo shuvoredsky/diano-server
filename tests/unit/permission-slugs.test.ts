@@ -49,10 +49,12 @@ describe('RBAC Permission Slugs Integrity (Routes vs Seed)', () => {
     }
   });
 
-  it('includes customer:read, customer:manage, and notification:manage in seed', () => {
+  it('includes customer:read, customer:manage, notification:manage, and section permissions in seed', () => {
     expect(seedSlugs.has('customer:read')).toBe(true);
     expect(seedSlugs.has('customer:manage')).toBe(true);
     expect(seedSlugs.has('notification:manage')).toBe(true);
+    expect(seedSlugs.has('section:read')).toBe(true);
+    expect(seedSlugs.has('section:manage')).toBe(true);
   });
 
   it('unifies legacy fraud:rule_manage into fraud:manage across seed and routes', () => {

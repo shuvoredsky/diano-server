@@ -201,6 +201,7 @@ export interface CreateProductDto {
     metaKeywords?: string | null;
   };
   tags?: string[];
+  sectionIds?: string[];
   relatedProductIds?: string[];
   variants: CreateVariantInput[];
 }
@@ -231,6 +232,7 @@ export interface UpdateProductDto {
     metaKeywords?: string | null;
   };
   tags?: string[];
+  sectionIds?: string[];
   relatedProductIds?: string[];
 }
 
