@@ -6018,6 +6018,358 @@
         }
       }
     },
+    "/api/v1/admin/sections": {
+      "get": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Get sections hierarchical tree with product counts",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sections tree retrieved"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Create a new storefront merchandising section",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Section created"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/sections/reorder": {
+      "patch": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Reorder merchandising sections and update parent hierarchy",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sections reordered"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/sections/{id}": {
+      "get": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Get section by ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Section retrieved"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Update section details, hierarchy, or scheduling",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Section updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Delete section if no child sections exist",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Section deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/sections/{id}/toggle": {
+      "patch": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Toggle active status of section",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Section status toggled"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/sections/{id}/products": {
+      "post": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Assign products to section with sort ordering",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Products assigned to section"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/sections/{id}/products/{productId}": {
+      "delete": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Remove a product from a section",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product removed from section"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/sections/{id}/products/reorder": {
+      "put": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Admin: Reorder products assigned to a section",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Section products reordered"
+          }
+        }
+      }
+    },
+    "/api/v1/public/sections": {
+      "get": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Public: Get active, currently scheduled storefront sections tree",
+        "responses": {
+          "200": {
+            "description": "Public sections tree retrieved"
+          }
+        }
+      }
+    },
+    "/api/v1/public/sections/{slug}/products": {
+      "get": {
+        "tags": [
+          "Sections"
+        ],
+        "summary": "Public: Get paginated active products belonging to section by slug",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Section products retrieved"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
